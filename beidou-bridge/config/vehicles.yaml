@@ -1,0 +1,9 @@
+vehicles:
+  - vehicleId: "LU2606000100"
+    clientId: "LU2606000100"
+    floor: 1
+    enabled: true
+  - vehicleId: "lingu_test2"
+    clientId: "lingu_test2"
+    floor: 1
+    enabled: false

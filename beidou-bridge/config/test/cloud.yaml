@@ -1,0 +1,14 @@
+baseUrl: "https://sztu.lingubot.cn/admin-api"
+mock: true
+timeoutMs: 10000
+tenantId: "1"
+enrichTaskFromList: true
+positionMode: "lonlat"
+statusQueryMode: "batch"
+statusBatchPath: "/device/select_all_device"
+auth:
+  type: "lingu_admin_login"
+  loginPath: "/system/auth/login"
+  tenantName: "test"
+  username: "test"
+  password: "test"

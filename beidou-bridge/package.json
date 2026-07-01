@@ -1,0 +1,43 @@
+{
+  "name": "beidou-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "云平台与北斗系统之间的 HTTP 中转程序（第一期）",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc",
+    "start": "node dist/main.js",
+    "start:dev": "tsx src/main.ts",
+    "typecheck": "tsc --noEmit",
+    "test:tpapi-login": "npm run build && node dist/scripts/test-tpapi-login.js",
+    "test:tpapi-devices": "npm run build && node dist/scripts/test-tpapi-devices.js",
+    "test:tpapi-set-task-point": "npm run build && node dist/scripts/test-tpapi-set-task-point.js",
+    "test:tpapi-get-task-point": "npm run build && node dist/scripts/test-tpapi-get-task-point.js",
+    "pre-site:check": "powershell -ExecutionPolicy Bypass -File scripts/pre-site-check.ps1",
+    "pre-site:install": "powershell -ExecutionPolicy Bypass -File scripts/pre-site-check.ps1 -Install",
+    "pre-site:b1": "powershell -ExecutionPolicy Bypass -File scripts/run-pre-site-b1.ps1",
+    "query:admin-device": "powershell -ExecutionPolicy Bypass -File scripts/query-admin-device.ps1",
+    "sim:lab": "powershell -ExecutionPolicy Bypass -File scripts/run-simulation-lab.ps1",
+    "sim:lab:mock": "powershell -ExecutionPolicy Bypass -File scripts/run-simulation-lab.ps1 -MockCloudLab",
+    "sim:monitor": "powershell -ExecutionPolicy Bypass -File scripts/run-simulation-lab.ps1 -MonitorOnly",
+    "sim:write": "powershell -ExecutionPolicy Bypass -File scripts/sim/write-path-test.ps1",
+    "package:site": "powershell -ExecutionPolicy Bypass -File scripts/package-site-release.ps1",
+    "install:windows": "powershell -ExecutionPolicy Bypass -File scripts/windows/install.ps1",
+    "autostart:install": "powershell -ExecutionPolicy Bypass -File scripts/windows/register-autostart.ps1",
+    "autostart:remove": "powershell -ExecutionPolicy Bypass -File scripts/windows/unregister-autostart.ps1"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "fastify": "^5.2.1",
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

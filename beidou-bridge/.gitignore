@@ -1,0 +1,13 @@
+node_modules/
+dist/
+data/beidou-callback.json
+data-site/beidou-callback.json
+data-sim/
+release/
+data-tpapi/beidou-callback.json
+data/test/
+.env
+*.log
+*.docx.bak
+docs/_proto.zip
+docs/_proto_extract/

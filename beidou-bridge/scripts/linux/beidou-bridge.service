@@ -1,0 +1,15 @@
+[Unit]
+Description=beidou-bridge HTTP relay (cloud platform <-> Beidou)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/beidou-bridge
+ExecStart=/usr/bin/node dist/main.js
+Restart=always
+RestartSec=10
+EnvironmentFile=-/opt/beidou-bridge/.env
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,15 @@
+# 现场 B1 联调：admin-api + sztu（商用/教研同一台云，车端需商用版启动）
+baseUrl: "https://sztu.lingubot.cn/admin-api"
+mock: false
+timeoutMs: 10000
+tenantId: "1"
+enrichTaskFromList: true
+positionMode: "map_xy"
+statusQueryMode: "batch"
+statusBatchPath: "/device/select_all_device"
+auth:
+  type: "lingu_admin_login"
+  loginPath: "/system/auth/login"
+  tenantName: "${CLOUD_TENANT_NAME}"
+  username: "${CLOUD_USERNAME}"
+  password: "${CLOUD_PASSWORD}"

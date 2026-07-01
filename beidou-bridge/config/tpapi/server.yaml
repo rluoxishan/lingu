@@ -1,0 +1,12 @@
+server:
+  host: "0.0.0.0"
+  port: 8080
+
+push:
+  retryTimes: 2
+  retryIntervalMs: 500
+  requestTimeoutMs: 5000
+  frequencyMinMs: 3000
+  frequencyMaxMs: 5000
+
+dataDir: "./data-tpapi"

@@ -1,0 +1,15 @@
+baseUrl: "https://sztu.lingubot.cn/admin-api"
+mock: false
+timeoutMs: 10000
+tenantId: "1"
+enrichTaskFromList: true
+positionMode: "map_xy"
+# batch: POST select_all_device 一次查多车；single: 逐车 GET detail（兼容旧行为）
+statusQueryMode: "batch"
+statusBatchPath: "/device/select_all_device"
+auth:
+  type: "lingu_admin_login"
+  loginPath: "/system/auth/login"
+  tenantName: "${CLOUD_TENANT_NAME}"
+  username: "${CLOUD_USERNAME}"
+  password: "${CLOUD_PASSWORD}"

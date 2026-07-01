@@ -1,0 +1,15 @@
+ID: 0
+Author: Joey
+Comment: 这个可以不用车端上报吧，云端自行统计吧，先不加，内容不对意义不大
+Anchor: 6.6 1010007 运营统计快照上报
+---
+ID: 1
+Author: Joey
+Comment: 事件内容不对，感知监测的内容没有体现
+Anchor: 障碍停车时长（秒）（P1）
+---
+ID: 2
+Author: Joey
+Comment: 看看这些能不能做成标题，大纲体现，好跳转
+Anchor: 7.2 2010002 修改参数
+---

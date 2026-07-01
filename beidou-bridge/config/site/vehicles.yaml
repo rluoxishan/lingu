@@ -1,0 +1,6 @@
+# 现场 B1：仅启用到场巡检车（deviceId = 云平台 deviceId）
+vehicles:
+  - vehicleId: "LU2606000100"
+    clientId: "LU2606000100"
+    floor: 1
+    enabled: true

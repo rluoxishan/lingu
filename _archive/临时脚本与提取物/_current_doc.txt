@@ -1,0 +1,1888 @@
+云平台-机器人通信协议
+V1.0.1（内部标准版）
+修订历史
+日期
+版本
+描述
+作者
+2026-06-26
+V1.0.0-INTERNAL-R13
+移除 §5.8 业务能力对照；修正 §5.6/§5.7 章节顺序
+—
+2026-06-28
+V1.0.1
+会议修改协议关键内容，删除不必要信息
+2026-06-29
+V1.0.3
+修复 §5.6.17–§5.6.19 导航标题与重复段落；§7.7 alarmTasks 对齐口岸 xlsx（V1.0.3）
+—
+Joey.Liu
+1 编写目的
+记录 AGV / 巡检 / 无人车与云管理平台之间的通信协议，作为云平台、前端及车端 MQTT 适配层的开发规范。
+通讯链路：云管理平台 ── EMQX（MQTT）──► 车端 MQTT 适配层 ──► 车端业务软件
+MQTT 周期报文与 Client-side RPC 在同一文档内分篇编排（见 §5.0）。
+文档目录
+部分
+章节
+Topic
+说明
+共用
+§1~§5、§8
+—
+目的、流程、总则、枚举、拓展
+**第一篇 MQTT 报文**
+§6 车辆上行、§7 云平台下行
+dev/pub、dev/sub、dev/reply
+周期上报、云下发指令
+Word 打开后可用导航窗格按「第一篇 / 第二篇 / §6.1 / §10.2」等标题跳转。
+2 适用范围
+云管理平台（云服务）与车辆端 MQTT 适配层之间的通信规范；前端、云端、车端开发联调参考。
+- **第一篇（§6、§7）**：MQTT 周期上报与云下发指令（dev/pub、dev/sub、dev/reply）
+3 云平台服务组件
+EMQX 5.8.4、MySQL 5.7、Redis 4.0 (1.9.1)
+组件
+版本
+EMQX
+5.8.4
+MySQL
+5.7
+Redis
+4.0 (1.9.1)
+4 IOT 交互流程
+4.1 车辆注册
+1：在云平台上注册车辆
+2：注册车辆后云平台提供秘钥文件下载
+3：将下载好秘钥文件保存到车辆指定位置
+4：给车辆配置 EMQX 服务信息
+4.2 车辆与 EMQX 建立连接
+1：车辆启动读取 EMQX 相关的配置信息：秘钥文件、服务信息
+2：车辆与 EMQX 建立连接
+3：连接建立成功/失败
+注：EMQX 使用 mysql 用户认证插件（emqx_auth_mysql）：根据 mysql 注册的用户名和密码验证连接用户是否合法。
+4.3 车辆在线离线状态
+1：车辆连接 EMQX 或断开与 EMQX 的连接会触发上线/下线事件
+2：云服务在线则实时消费上线/下线事件，改变车辆在线状态
+3：云服务离线，EMQX 将上线/下线事件保存到队列，待云服务上线后再继续消费
+注：
+- 上线事件 topic：$events/client_connected
+- 下线事件 topic：$events/client_disconnected
+- EMQX 规则引擎转发至普通 topic（设置 retain）：/mqtt/onoff/{sn}
+- 云平台共享订阅：$share/{app_name}/online_status/+
+部署时由规则引擎将 /mqtt/onoff/{sn} 转发至 online_status/{clientId}，本文档统一写作 online_status/{clientId}。
+4.4 车辆接收云平台指令
+1：云服务通过 EMQX 发布订阅消息，向车辆下发指令
+2：EMQX 向 dev/sub/{clientId} 发布事件
+3：车辆监听并处理消息
+4：车辆通过 dev/reply/{clientId} 回复执行结果
+5：云服务监听 dev/reply/+ 处理回复
+4.5 车辆数据上报云平台
+1：车辆向 dev/pub/{clientId} 发布数据消息事件
+2：未及时消费的事件进入消息队列
+3：云服务消费数据消息事件并存储数据
+5 协议
+5.0 文档分篇与阅读指引
+篇
+章节
+Topic
+适用场景
+**第一篇 MQTT 报文**
+§6 车辆上行、§7 云平台下行
+dev/pub、dev/sub、dev/reply
+周期状态/高频流、云下发指令、指令回执
+**共用**
+§4 流程、§5 总则与枚举、§8 拓展
+—
+认证、枚举、产品线、统计
+**选型原则**：周期数据走第一篇（dev/pub）；关键离散事件与须确认送达的上报走第二篇（dev/event RPC），**不得**与 1010001/1010003 混用 dev/pub。详见 §5.7。
+5.1 Topic 描述
+5.1.1 第一篇：MQTT 报文 Topic
+车辆端订阅
+Topic
+说明
+dev/sub/{clientId}
+订阅云服务下发指令
+车辆端发布
+Topic
+说明
+dev/reply/{clientId}
+回复云平台指令执行结果
+dev/pub/{clientId}
+周期/触发类数据上报（1010001~1010004）
+云服务订阅
+Topic
+说明
+dev/reply/+
+订阅车辆指令回复
+$share/{app_name}/dev/pub/+
+订阅车辆周期上报（共享 topic）
+$share/{app_name}/online_status/+
+订阅车辆上线下线事件
+云服务发布
+Topic
+说明
+dev/sub/{clientId}
+向车辆下发指令（含 1010002 确认回复）
+5.2 认证密钥
+车辆客户端参数设置：
+项目
+值
+ClientId
+填车辆注册时的编号
+Username
+填车辆注册时的编号
+Password
+从秘钥文件（4.1 车辆注册获取）按照规则解析出密码
+Keep Alive
+60 秒（推荐）
+注：为了安全，解析规则由双方私下约定，不在协议中展示。
+5.3 数据结构
+云平台给车辆下发的数据结构
+字段
+类型
+描述
+id
+Long
+云平台下发数据时携带的 id，车辆回复时回传（雪花算法）
+time
+Long
+消息时间戳，单位毫秒
+type
+String
+指令类型：AAABBBB，AAA 属于模块，BBBB 属于指令编码
+data
+Object
+附加数据，根据业务需要承接实际数据体
+{
+"id": 1686004858937364480,
+"time": 1740469352000,
+"type": "2010001",
+"data": {}
+}
+车辆收到云平台数据回复的数据结构
+字段
+类型
+描述
+id
+Long
+回传云平台下发的 id
+code
+Integer
+200：成功；500：失败
+msg
+String
+回复描述
+time
+Long
+消息时间戳，单位毫秒
+type
+String
+回传云平台携带的 type
+data
+Object
+附加数据
+{
+"id": 1686004858937364480,
+"code": 200,
+"msg": "ok",
+"time": 1740469352100,
+"type": "2010001",
+"data": {}
+}
+车辆主动上报数据的数据结构
+字段
+类型
+描述
+id
+Long
+车辆自定义，确保短时间内每条消息的 id 不一样
+time
+Long
+消息时间戳，单位毫秒
+type
+String
+指令类型，详情见 §5.5 指令类型表
+data
+Object
+附加数据
+{
+"id": 1740469352001,
+"time": 1740469352000,
+"type": "1010001",
+"data": {}
+}
+5.4 通用约定
+约定
+说明
+id
+云下发用雪花算法；车回复原样回传
+time
+毫秒时间戳
+type
+格式 AAABBBB（AAA=模块，BBBB=编码）
+未知字段
+接收方忽略不报错，可原样存储
+clientId
+车辆标识统一用 MQTT ClientId；**车端上报不得重复传 vehicleId**，云端通过 clientId 反查车辆档案
+回复超时
+第一篇：除 2010005 外，5 秒内 dev/reply；第二篇：dev/event RPC 建议 5 秒、最多重试 3 次（§9.1）
+QoS
+第一篇：1010002、201xxxx（除 2010005）= 2；1010001/1010003 = 0；1010004 = 1；第二篇：1010006/1010008 = 2（§9.1）
+5.5 指令类型表（持续更新）
+5.5.1 第一篇：MQTT 报文 type
+指令发起方
+type
+说明
+车辆
+1010001
+低频状态上报（§6.1）
+车辆
+1010002
+本地任务列表上报（§6.2）
+车辆
+1010003
+高频数据上报（§6.4）
+车辆
+1010004
+故障状态上报（§6.3）
+云平台
+2010001
+下发任务（§7.1）
+云平台
+2010002
+修改参数（§7.2）
+云平台
+2010003
+车辆出货（§7.3）
+云平台
+2010004
+开启视频（§7.4）
+云平台
+2010005
+遥控车辆（§7.5）
+云平台
+2010006
+查看车辆配置（§7.6）
+云平台
+2010007
+获取车辆点位信息（§7.7）
+云平台
+2010008
+紧急开关操作（§7.8）
+云平台
+2010009
+任务控制（§7.9，P1）
+云平台
+2010010
+获取车辆地图（§7.10，P1）
+云平台
+2010011
+日志提取触发（§7.11，P1）；结果回报见第二篇 §10.1
+云平台
+2010012
+高频数据开关（§7.12，P1）
+云平台
+2010013
+云台控制（§7.13，P1）
+5.6 通用枚举定义
+约定：**新增指令字段优先使用 String 枚举**；IOT 遗留整型字段（如 workStatus、brakeStatus）在报文中仍传数值，云平台展示与业务层统一映射为下列枚举名。
+5.6.1 WorkStatus（1010001.workStatus，整型传输）
+枚举名
+值
+说明
+IDLE
+0
+空闲
+WORKING
+1
+任务中
+FAULT
+2
+故障
+CHARGING
+3
+充电
+EMERGENCY_STOP
+4
+急停
+5.6.2RobotStatus（1010001.robotStatus，整型传输）
+枚举名
+值
+说明
+INITIALIZING
+0
+开机初始化状态
+STANDBY
+1
+待机中
+PLANNING
+2
+规划中
+NAVIGATING
+3
+导航中
+CLEANING
+4
+清扫中
+CRUISING
+5
+巡航中
+GUIDING
+6
+导览中
+CHARGING_DOCKING
+7
+充电对接中
+CHARGING
+8
+充电中
+VOICE_CONSULTATION
+9
+语音咨询中
+PAUSED
+10
+暂停中
+BLOCKED
+11
+阻挡堵塞中
+5.6.3 BrakeStatus（1010001 / 2010006，整型传输）
+枚举名
+值
+说明
+OFF
+0
+关闭
+ON
+1
+开启
+5.6.4 VideoStatus（2010004.status，整型传输）
+枚举名
+值
+说明
+OFF
+0
+关闭
+ON
+1
+开启
+5.6.5 CameraView（2010004.view，整型传输）
+枚举名
+值
+说明
+FRONT
+1
+前摄像头
+RIGHT
+2
+右摄像头
+REAR
+3
+后摄像头
+LEFT
+4
+左摄像头
+5.6.6 TurnSignal（2010002.turnSignals，整型传输）
+枚举名
+值
+说明
+OFF
+0
+全灭
+LEFT
+1
+左转
+RIGHT
+2
+右转
+HAZARD
+3
+双闪
+5.6.7 FaultLevel（1010004，整型传输）
+枚举名
+值
+说明
+OK
+1
+正常
+WARN
+2
+警告
+ERROR
+3
+错误
+FATAL
+4
+致命
+5.6.8 CycleType（2010001 / 1010002，String 枚举）
+枚举名
+说明
+EVERY_WEEK
+每周
+ODD_WEEK
+单周
+EVEN_WEEK
+双周
+5.6.9 ExecutionMode（2010001 / 1010002，String 枚举）
+枚举名
+说明
+IMMEDIATE
+立即执行
+SCHEDULED
+计划任务
+5.6.10 TaskControlAction（2010009.action，String 枚举）
+枚举名
+说明
+PAUSE
+暂停
+RESUME
+恢复
+CANCEL
+停止
+CHANGE_SPEED
+改速
+5.6.11 EmergencyAction（2010008.action，String 枚举）
+枚举名
+说明
+EMERGENCY_STOP
+紧急停止
+RELEASE
+解除
+5.6.12 StatMetric（云端运营统计指标，String 枚举）
+枚举名
+说明
+VEHICLE_COUNT
+车辆总数
+VEHICLE_COUNT_BY_MODEL
+车辆数量分布（按车型）
+VEHICLE_MILEAGE
+车辆里程
+TASK_SUCCESS_RATE
+任务成功率
+SERVICE_STATION_COUNT
+服务站点数
+VEHICLE_PROVINCE_DISTRIBUTION
+车辆省界分布
+ONLINE_VEHICLE_LIST
+在线车辆列表
+5.6.13 ObstacleType（1010003.obstacles.type，String 枚举）
+枚举名
+说明
+PEDESTRIAN
+行人
+VEHICLE
+车辆
+STATIC
+静态障碍物
+UNKNOWN
+未知
+5.6.14 HighFreqStatus（2010012.status，String 枚举）
+枚举名
+说明
+ON
+开启高频上报
+OFF
+关闭高频上报
+5.6.15 HighFreqSensorType（2010012.sensorTypes / 1010003 字段块，String 枚举）
+枚举名
+对应 1010003 字段
+说明
+RTK
+x, y, z, yaw, pitch, roll, speedMps
+位姿
+TRAJECTORY
+trajectoryPoints
+局部规划轨迹
+OBSTACLE
+obstacles
+障碍物
+ULTRASONIC
+ultrasonicSense
+超声波
+CHASSIS
+yaw, pitch, roll
+底盘姿态（可与 RTK 合并上报）
+不传 `sensorTypes` 时默认开启全部类型。
+5.6.16 RoutePlanType（1010003.planType ，String 枚举）
+枚举名
+说明
+ROUTING
+全局路线规划
+PLANNING
+局部路线规划
+5.6.17 PerceptionEventType（1010001.perceptionInfo.eventType，String 枚举）
+枚举定义对齐《口岸平台后台报警的机器人相关功能描述.xlsx》；自驾机器人场景可额外使用 TRAFFIC_LIGHT、BARRIER。
+枚举名
+说明
+TRAFFIC_LIGHT
+红绿灯场景
+BARRIER
+道闸场景
+PERCEPTION_ALERT
+感知检测告警（通用）
+FIRE_DETECTION
+火灾检测（火焰/明火/异常高亮燃烧区域）
+SMOKE_DETECTION
+烟雾检测（烟雾/烟气扩散，辅助火情判断）
+CROWD_DENSITY
+区域人员密度检测（人数/密度超阈值聚集告警）
+ABSENCE_FROM_POST
+离岗检测（岗位无人值守/异常离岗）
+ABNORMAL_OBJECT
+异常物检测（遗留物/堆放物/可疑包裹）
+INTERNAL_FACE_MATCH
+内部人脸库检测（边检内部人员识别匹配）
+SENSITIVE_WORD
+敏感词检测（语音关键词命中告警）
+5.6.18 PerceptionEventStatus（1010001.eventStatus，String 枚举）
+枚举名
+说明
+DETECTED
+检测到异常/触发告警
+ALERTING
+告警持续中
+UPDATING
+事件状态更新
+RESOLVED
+已解除/恢复正常
+5.6.18 PerceptionEventStatus（1010001.perceptionInfo.eventStatus，String 枚举）枚举名说明DETECTED检测到异常/触发告警ALERTING告警持续中UPDATING事件状态更新RESOLVED已解除/恢复正常5.6.19 AlarmTaskType（2010007.alarmTasks[].type，String 枚举）2010007 回复中 alarmTasks 的 type 取《口岸平台后台报警的机器人相关功能描述.xlsx》七项检测能力，与 §5.6.17 口岸子集枚举名一致。type（枚举名）name（中文）说明FIRE_DETECTION火灾检测火焰/明火/异常高亮燃烧区域检测SMOKE_DETECTION烟雾检测烟雾/烟气扩散，辅助火情判断CROWD_DENSITY区域人员密度检测人数/密度超阈值聚集告警ABSENCE_FROM_POST离岗检测岗位无人值守/异常离岗ABNORMAL_OBJECT异常物检测遗留物/堆放物/可疑包裹INTERNAL_FACE_MATCH内部人脸库检测边检内部人员名单比对SENSITIVE_WORD敏感词检测语音关键词/风险语义命中告警第一篇 MQTT 报文协议
+5.6.18 PerceptionEventStatus（1010001.perceptionInfo.eventStatus，String 枚举）
+枚举名
+说明
+DETECTED
+检测到异常/触发告警
+ALERTING
+告警持续中
+UPDATING
+事件状态更新
+RESOLVED
+已解除/恢复正常
+5.6.19 AlarmTaskType（2010007.alarmTasks[].type，String 枚举）
+2010007 回复中 alarmTasks 的 type 取《口岸平台后台报警的机器人相关功能描述.xlsx》七项检测能力，与 §5.6.17 口岸子集枚举名一致。
+type（枚举名）
+name（中文）
+说明
+FIRE_DETECTION
+火灾检测
+火焰/明火/异常高亮燃烧区域检测
+SMOKE_DETECTION
+烟雾检测
+烟雾/烟气扩散，辅助火情判断
+CROWD_DENSITY
+区域人员密度检测
+人数/密度超阈值聚集告警
+ABSENCE_FROM_POST
+离岗检测
+岗位无人值守/异常离岗
+ABNORMAL_OBJECT
+异常物检测
+遗留物/堆放物/可疑包裹
+INTERNAL_FACE_MATCH
+内部人脸库检测
+边检内部人员名单比对
+SENSITIVE_WORD
+敏感词检测
+语音关键词/风险语义命中告警
+本篇约定 dev/pub / dev/sub / dev/reply 上的周期上报与指令交互。离散事件与日志结果见 **第二篇 §9~§11**。
+6 车辆上行（MQTT）
+车辆通过 dev/pub 主动上报，分为三类：
+1. **低频综合状态（1010001）**：1Hz，常规监控与任务进度。
+2. **高频数据（1010003）**：10Hz ENU 位姿/轨迹/障碍物；由 **2010012** 控制，默认关闭（§7.12）。
+3. **故障状态（1010004）**：有活动故障时 1Hz 持续上报。
+本地任务列表（1010002）在变更时上报，云平台经 dev/sub 回复确认。
+**说明**：感知监测事件（1010008）、日志提取结果（1010006）属 **Client-side RPC**，不在本篇，见 **§10**。车队运营统计（§8.4）由云平台自行聚合。
+6.1 1010001 车辆状态信息上报
+描述：车辆 1Hz 定时上报自身综合状态，供云平台常规查看与任务编排。
+项目
+值
+topic
+dev/pub/{clientId}
+retain
+false
+qos
+0
+type
+1010001
+频率
+1Hz
+平台回复
+不需要
+data 字段
+字段
+类型
+必填
+描述
+taskId
+String
+true
+当前执行任务的 id，唯一任务字段
+position
+String
+true
+室外车辆位置，经度,纬度,高程（如 "114.05129,22.508236,39.19"），室外机器人必填
+position_xyz
+String
+true
+室内栅格地图坐标位置，室内机器人必填，x,y,z（米,米）
+heading
+Number
+true
+航向角（度）
+workStatus
+Integer
+true
+WorkStatus 枚举，见 §5.6.1
+robotStatus
+Integer
+true
+机器生命周期状态枚举， 见 §5.6.2
+isInNode
+Boolean
+false
+是否停留在站点
+inNodeName
+String
+false
+当前停留站点名字
+inNodeTime
+Long
+false
+预计当前站点停留时间（秒）
+nextNodeName
+String
+false
+下一个站点名字
+nextNodeTime
+Long
+false
+预计下一站点路程时间（秒）
+battery
+Integer
+true
+车辆电量 0-100
+brakeStatus
+Integer
+true
+BrakeStatus 枚举，见 §5.6.3
+speedMps
+Number
+false
+速度（m/s）
+taskProgress
+Integer
+false
+任务进度 0-100
+perceptionInfo
+Object
+false
+感知信息
+vehicleInfo
+Object
+false
+车辆信息
+perceptionInfo 字段
+字段
+类型
+必填
+描述
+eventType
+String
+true
+PerceptionEventType枚举
+eventStatus
+String
+true
+PerceptionEventStatus 枚举，见 §5.6.18
+eventId
+String
+true
+事件唯一 id，车端生成，用于去重
+description
+String
+false
+事件描述摘要（对齐口岸后台报警功能说明）
+confidenceScore
+Number
+false
+检测置信度 0-1
+attachmentKeys
+String[]
+false
+现场图片/视频附件 Key 列表
+detectRegion
+String
+false
+检测区域标识（离岗/密度/异常物等）
+densityCount
+Integer
+false
+CROWD_DENSITY：当前区域人数
+matchedPersonId
+absenceDurationSec
+Integer
+否
+ABSENCE_FROM_POST：离岗持续秒数
+objectType
+String
+否
+ABNORMAL_OBJECT：遗留物/堆放物等类型描述
+matchScore
+Number
+否
+INTERNAL_FACE_MATCH：人脸比对分数 0-1
+keywords
+String[]
+否
+SENSITIVE_WORD：命中的敏感词列表
+transcript
+String
+否
+SENSITIVE_WORD：语音识别文本片段
+String
+false
+INTERNAL_FACE_MATCH：匹配内部人员 id
+hitKeywords
+String[]
+false
+SENSITIVE_WORD：命中敏感词列表
+vehicleInfo 字段
+字段
+类型
+必填
+描述
+odometry
+Number
+true
+累计里程 ，km
+请求示例
+{
+"id": 1740469352001,
+"time": 1740469352000,
+"type": "1010001",
+"data": {
+"taskId": "T001",
+"position": "114.05129,22.508236,39.19",
+"position_xyz": "21.64,86.28,1.42",
+"workStatus": 1,
+"robotStatus": 1,
+"isInNode": false,
+"inNodeName": "",
+"inNodeTime": 0,
+"nextNodeName": "站点B",
+"nextNodeTime": 120,
+"battery": 85,
+"brakeStatus": 0,
+"heading": 81.85,
+"speedMps": 0.5,
+"taskProgress": 42, "perceptionInfo": { "eventType": "FIRE_DETECTION", "eventStatus": "DETECTED", "eventId": "EVT_FD_001", "description": "检测到疑似火焰区域", "confidenceScore": 0.91, "attachmentKeys": ["port/alarm/fire_001.jpg"], "detectRegion": "查验区A" },
+"vehicleInfo": {
+"odometry": 1250.5
+}
+}
+}
+云平台回复：无需回复。
+6.2 1010002 本地任务列表上报
+描述：车辆上报本地配置的任务列表。未上传或者更新过后要执行上传动作。
+项目
+值
+topic
+dev/pub/{clientId}
+retain
+false
+qos
+2
+type
+1010002
+触发
+本地任务变更时
+平台回复
+需要（dev/sub，type=1010002）
+data 每项字段（同7.1）
+字段
+类型
+描述
+taskId
+String
+任务 id
+taskName
+String
+任务名称
+returnPoint
+String
+返航点名称
+active
+Boolean
+是否开启。True：开启；False：关闭
+cycleDays
+Integer[]
+循环天数
+cycleType
+String
+EVERY_WEEK：每周；ODD_WEEK：单周；EVEN_WEEK：双周
+executionMode
+String
+IMMEDIATE：立即执行；SCHEDULED：计划任务
+startTime
+String
+执行时间，hh:mm
+taskNodes
+List[obj]
+任务节点信息
+上报示例
+{
+"id": 1740469352002,
+"time": 1740469352000,
+"type": "1010002",
+"data": [
+{
+"taskId": "LOCAL001",
+"taskName": "早班巡检",
+"returnPoint": "充电站1",
+"active": true,
+"cycleDays": [1, 2, 3, 4, 5],
+"cycleType": "EVERY_WEEK",
+"executionMode": "SCHEDULED",
+"startTime": "08:00",
+"taskNodes": [
+{ "order": 1, "taskPoint": "站点A", "duration": "60" },
+{ "order": 2, "taskPoint": "路线A", "duration": "0" }
+]
+}
+]
+}
+云平台回复
+项目
+值
+topic
+dev/sub/{clientId}
+retain
+false
+qos
+2
+字段
+类型
+描述
+id
+Long
+回传车辆上报 id
+time
+Long
+消息时间戳，单位毫秒
+type
+String
+1010002
+data.code
+Integer
+200：成功；500：失败
+data.msg
+String
+描述
+{
+"id": 1740469352002,
+"time": 1740469352100,
+"type": "1010002",
+"data": {
+"code": 200,
+"msg": "ok"
+}
+}
+6.3 1010004 故障状态上报
+描述：定频发布，尽量有活动故障时发布，故障没有就清除。告警推送、故障统计由云平台负责。
+项目
+值
+topic
+dev/pub/{clientId}
+qos
+1
+type
+1010004
+频率
+有故障时 1Hz
+平台回复
+不需要
+data 字段
+faultInfo 项
+字段
+类型
+描述
+faultLevel
+Integer
+FaultLevel 枚举，见 §5.6.7
+faultId
+String
+故障 id
+faultReportCount
+Integer
+故障重复次数
+faultDescription
+String
+描述
+请求示例
+{
+"id": 1740469352004,
+"time": 1740469352000,
+"type": "1010004",
+"data": {
+"faultInfo": [
+{
+"faultLevel": 3,
+"faultId": "F001",
+"faultReportCount": 1,
+"faultDescription": "GPS信号丢失",
+}
+]
+}
+}
+云平台回复：无需回复。
+6.4 1010003 高频数据上报
+描述：1Hz 上报车辆在**片区高精地图**坐标系下的位姿、**局部规划轨迹**、障碍物及超声波感知数据，用于云平台远程监控与自驾信息展示。坐标原点为当前片区高精地图原点，采用 **ENU（东-北-天）**，单位米。
+**开启条件**：仅当云平台通过 **2010012** 下发 `status=ON` 时车端才开始发送；默认关闭。可按 `sensorTypes` 选择性上报字段块（见 §5.6.19）。云平台开启后应**周期重发** 2010012；车辆连续 `keepAlivePeriods` 个周期未收到，或 `durationSec` 到期，则自动停止 1010003。
+项目
+值
+topic
+dev/pub/{clientId}
+retain
+false
+qos
+0
+type
+1010003
+频率
+10Hz（2010012 为 ON 时）
+开关控制
+2010012（§7.12），默认 OFF
+坐标系
+高精地图 ENU，相对片区地图原点
+平台回复
+不需要
+data 字段
+字段
+类型
+必填
+描述
+dataType
+String
+true
+固定 LOC_HIGH_FREQ（P1）
+persist
+Bpointoolean
+true
+固定 false（P1）
+position_lla
+String
+true
+经纬高坐标
+position_xyz
+String
+true
+地图坐标
+heading
+Number
+true
+航向角（度）（P1）
+speedMps
+Number
+false
+速度 m/s（P1）
+planType
+Integer
+false
+RoutePlanType 枚举，见 §5.6.16；有 trajectoryPoints 时建议填写（P1）
+trajectoryPoints
+Array
+false
+规划轨迹点列表，10Hz（P1）
+obstacles
+Array
+false
+障碍物列表，10Hz（P1）
+ultrasonicSense
+Array
+false
+超声传感器列表
+trajectoryPoints 项
+字段
+类型
+描述
+x
+Number
+东向坐标（米）
+y
+Number
+北向坐标（米）
+z
+Number
+上向坐标（米）
+heading
+Number
+该点航向（弧度）
+obstacles 项
+字段
+类型
+描述
+id
+Integer
+障碍物 id
+type
+String
+ObstacleType 枚举，见 §5.6.13
+polygon
+Array
+障碍物投影多边形顶点列表
+heading
+Number
+障碍物航向（弧度）
+velocity
+Number
+障碍物速度（m/s）
+polygon 项
+字段
+类型
+描述
+x
+Number
+地图坐标（米）
+y
+Number
+地图坐标（米）
+ultrasonicSense 项
+字段
+类型
+描述
+sensorId
+Integer
+传感器编号
+distance
+Number
+测距值（厘米）
+请求示例
+{
+"id": 1740469352003,
+"time": 1740469352000,
+"type": "1010003",
+"data": {
+"dataType": "LOC_HIGH_FREQ",
+"persist": false,
+"mapId": "map_factory_01",
+"position_lla": "12.345,11.01,111.0",
+"position_xyz": "12.345,11.01,111.0",
+"heading": 81.86,
+"speedMps": 0.11,
+"planType": "PLANNING",
+"trajectoryPoints": [
+{ "x": 1.5, "y": 2.3, "z": 0, "heading": 1.57 },
+{ "x": 2.0, "y": 2.8, "z": 0, "heading": 1.60 }
+],
+"obstacles": [
+{
+"id": 1,
+"type": "PEDESTRIAN",
+"polygon": [
+{ "x": 4.8, "y": 9.8 },
+{ "x": 5.2, "y": 9.8 },
+{ "x": 5.2, "y": 10.2 },
+{ "x": 4.8, "y": 10.2 }
+],
+"heading": 1.57,
+"velocity": 1.2
+},
+{
+"id": 2,
+"type": "VEHICLE",
+"polygon": [
+{ "x": -3.8, "y": 7.0 },
+{ "x": -2.2, "y": 7.0 },
+{ "x": -2.2, "y": 9.0 },
+{ "x": -3.8, "y": 9.0 }
+],
+"heading": 0,
+"velocity": 0
+}
+],
+"ultrasonicSense": [
+{ "sensorId": 1, "distance": 150 },
+{ "sensorId": 2, "distance": 200 }
+]
+}
+}
+trajectoryPoints / planType 字段说明
+字段
+用途
+`trajectoryPoints[]`
+当前局部规划路径点序列，供远程监控页画线
+`planType`
+ROUTING:全局路径规划；PLANNING:局部路径规划
+`obstacles[]`
+视觉/激光感知障碍物（远程监控，非告警推送）
+云平台回复：无需回复。
+7 云平台下行（MQTT）
+除 7.5 遥控外，所有指令 qos=2，车辆应在 5 秒内通过 dev/reply/{clientId} 回复。
+7.1 2010001 下发任务
+描述：下发任务给车辆立即执行或按计划执行。支持 任务名称节点形式。
+项目
+值
+topic
+dev/sub/{clientId}
+retain
+false
+qos
+2
+type
+2010001
+data 字段
+字段
+类型
+云必填
+描述
+taskId
+String
+是
+任务 id
+taskName
+String
+否
+任务名称
+returnPoint
+String
+否
+返航点：String 为任务名称
+active
+Boolean
+否
+是否开启
+cycleDays
+Integer[]
+否
+循环天数
+cycleType
+String
+否
+EVERY_WEEK / ODD_WEEK / EVEN_WEEK
+executionMode
+String
+是
+IMMEDIATE / SCHEDULED
+startTime
+String
+否
+执行时间 hh:mm
+taskNodes
+List[obj]
+是
+任务节点信息
+taskNodes 节点
+字段
+类型
+描述
+order
+Integer
+节点顺序
+taskPoint
+String
+任务名称
+taskPointXYZW
+String
+任务坐标x,y与角度四元素(0,0,z,w)，和任务名称需要二选一
+duration
+String
+停留时间（秒）
+请求示例
+{
+"id": 1686004858937364480,
+"time": 1740469352000,
+"type": "2010001",
+"data": {
+"taskId": "T001",
+"taskName": "早班巡检",
+"returnPoint": "充电站1",
+"returnTask": "RT001",
+"active": true,
+"executionMode": "IMMEDIATE",
+"cycleDays": [1, 2, 3, 4, 5],
+"cycleType": "EVERY_WEEK",
+"startTime": "08:00",
+"taskNodes": [
+{ "order": 1, "taskPoint": "站点A", "duration": "60" },
+{ "order": 2, "taskPoint": "巡航路线A", "duration": "60" },
+{ "order": 3, "taskPointXYZW": "11.01,22.221,0,1", "duration": "0" }
+]
+}
+}
+车辆回复
+项目
+值
+topic
+dev/reply/{clientId}
+retain
+false
+qos
+2
+字段
+类型
+描述
+id
+Long
+回传云平台下发的 id
+time
+Long
+消息时间戳，单位毫秒
+type
+String
+2010001
+data.code
+Integer
+200：成功；500：失败
+data.msg
+String
+描述
+{
+"id": 1686004858937364480,
+"code": 200,
+"msg": "ok",
+"time": 1740469352100,
+"type": "2010001",
+"data": {}
+}
+7.2 2010002 修改参数
+描述：修改车辆配置，例如车灯、雷达、屏幕，或通过 target 模型控制云台、货柜、语音等设备；可下发离线策略控制通信中断时车辆行为。
+项目
+值
+topic
+dev/sub/{clientId}
+retain
+false
+qos
+2
+type
+2010002
+data 字段（flat 结构）
+字段
+类型
+描述
+brake
+Integer
+BrakeStatus 枚举，见 §5.6.2
+headlights
+Integer
+VideoStatus 枚举（0=OFF，1=ON）
+ultrasonic
+Integer
+VideoStatus 枚举（0=OFF，1=ON）
+screen
+Integer
+VideoStatus 枚举（0=OFF，1=ON）
+turnSignals
+Integer
+TurnSignal 枚举，见 §5.6.6
+deviceControl
+Object
+自定义设备控制修改
+deviceControl 节点
+字段
+类型
+描述
+target
+String
+GIMBAL（云台）、CONTAINER（货柜）、AUDIO（声音/语音）、POWER (电源)
+command
+String
+操作命令 SET/GET；GIMBAL 的 SET 参数见 params
+params
+Object
+否
+pan(°)/tilt(°)/zoom(倍率)
+请求示例（flat 字段）
+{
+"id": 1686004858937364480,
+"time": 1740469352000,
+"type": "2010002",
+"data": {
+"headlights": 1,
+"turnSignals": 3,
+"deviceControl": {
+"target" : "GIMBAL",
+"command": "SET", "params": { "pan": 15, "tilt": -5, "zoom": 1.5 }
+}
+}
+}
+车辆回复
+项目
+值
+topic
+dev/reply/{clientId}
+qos
+2
+type
+2010002
+字段
+类型
+描述
+code
+Integer
+200：成功；500：失败
+msg
+String
+描述
+7.3 2010003 通知出货
+描述：通知带有货柜的车辆执行出货动作。云平台在订单完成或用户取货时下发，车辆收到后控制货柜开门等出货机构。
+项目
+值
+topic
+dev/sub/{clientId}
+retain
+false
+qos
+2
+type
+2010003
+data 字段
+字段
+类型
+描述
+orderId
+String
+订单 id
+请求示例
+{
+"id": 1686004858937364483,
+"time": 1740469352000,
+"type": "2010003",
+"data": {
+"orderId": "ORD001"
+}
+}
+**车辆回复**：同 7.1，type 回传 2010003。
+7.4 2010004 开启视频
+描述：车辆视频推流开关。当开启时该指令以一定的周期向车辆定时发送。车辆如果间隔 n 个周期没收到该指令则关闭推流。如果车辆发现推流地址有变化则修改推流地址。
+项目
+值
+topic
+dev/sub/{clientId}
+qos
+2
+type
+2010004
+data 字段
+字段
+类型
+描述
+status
+Integer
+VideoStatus 枚举，见 §5.6.3
+view
+Integer
+CameraView 枚举，见 §5.6.4
+url
+String
+推流地址
+请求示例
+{
+"id": 1686004858937364484,
+"time": 1740469352000,
+"type": "2010004",
+"data": {
+"status": 1,
+"view": 1,
+"url": "rtmp://stream.example.com/live/cam1"
+}
+}
+**车辆回复**：同 7.1，type 回传 2010004。
+7.5 2010005 车辆遥控
+描述：远程遥控车辆底盘运动。底盘遥控在同一指令中组合下发。
+项目
+值
+topic
+dev/sub/{clientId}
+qos
+2
+type
+2010005
+车辆回复
+不需要
+data 字段
+字段
+类型
+描述
+speed
+Number
+底盘速度，m/s
+angle
+Number
+底盘转向角度,rad/s
+steering_angle
+Number
+底盘前轮转角角度/方向盘角度，适机型选择角速度或角度,°/s
+请求示例
+{
+"id": 1686004858937364485,
+"time": 1740469352000,
+"type": "2010005",
+"data": {
+"angle": 1.0,
+"speed": 2.0
+}
+}
+7.6 2010006 查看车辆配置
+描述：查看车辆当前配置参数。
+项目
+值
+topic
+dev/sub/{clientId}
+qos
+2
+type
+2010006
+请求 data 字段
+字段
+类型
+描述
+name
+String
+参数名（可选）
+请求示例
+{
+"id": 1686004858937364486,
+"time": 1740469352000,
+"type": "2010006",
+"data": {}
+}
+回复 data 字段（type 回传 2010006）
+字段
+类型
+描述
+brake
+Integer
+BrakeStatus 枚举，见 §5.6.2
+headlights
+Integer
+VideoStatus 枚举（0=OFF，1=ON）
+ultrasonic
+Integer
+VideoStatus 枚举（0=OFF，1=ON）
+screen
+Integer
+VideoStatus 枚举（0=OFF，1=ON）
+turnSignals
+Integer
+TurnSignal 枚举，见 §5.6.5
+deviceControl
+Object
+deviceControl 当前状态反馈：target、online（Boolean）、params（GIMBAL 含 pan/tilt/zoom）；2010002 SET 后可通过 2010006 GET 读取
+回复示例
+{
+"id": 1686004858937364486,
+"code": 200,
+"msg": "ok",
+"time": 1740469352100,
+"type": "2010006",
+"data": {
+"brake": 0,
+"headlights": 1,
+"ultrasonic": 1,
+"screen": 1,
+"turnSignals": 0,
+"deviceControl": {
+"target": "GIMBAL",
+"command": "GET",
+"params": { "pan": 15.0, "tilt": -5.0, "zoom": 1.5 },
+"online": true
+}
+}
+}
+7.7 2010007 获取车辆任务信息
+描述：获取车辆当前所有已注册点位信息，供云平台任务编排与地图展示使用。
+项目
+值
+topic
+dev/sub/{clientId}
+qos
+2
+type
+2010007
+**请求**：data 可为空对象 {}。
+请求示例
+{
+"id": 1686004858937364487,
+"time": 1740469352000,
+"type": "2010007",
+"data": {}
+}
+**回复 data**：Object（type 回传 2010007），字段如下：
+字段
+类型
+说明
+navPoints
+String[]
+导航点位名称列表
+routes
+String[]
+录制/巡航路线名称列表
+alarmTasks
+Object[]
+口岸检测任务能力列表（alarmTasks），type 与 name 对齐 xlsx「功能」列，见 §5.6.19；车端按已部署能力返回子集
+alarmTasks 每项字段：
+字段
+类型
+说明
+type
+String
+AlarmTaskType 枚举
+name
+String
+中文名称，与 xlsx「功能」列一致
+回复示例
+{
+"id": 1686004858937364487,
+"code": 200,
+"msg": "ok",
+"time": 1740469352100,
+"type": "2010007",
+"data": {
+"navPoints": ["充电站1", "站点A", "站点B"],
+"routes": ["录制路线1", "巡航路线2"],
+"alarmTasks": [
+{ "type": "FIRE_DETECTION", "name": "火灾检测" },
+    { "type": "SMOKE_DETECTION", "name": "烟雾检测" },
+    { "type": "CROWD_DENSITY", "name": "区域人员密度检测" },
+    { "type": "ABSENCE_FROM_POST", "name": "离岗检测" },
+    { "type": "ABNORMAL_OBJECT", "name": "异常物检测" },
+    { "type": "INTERNAL_FACE_MATCH", "name": "内部人脸库检测" },
+    { "type": "SENSITIVE_WORD", "name": "敏感词检测" }
+]
+}
+}
+7.8 2010008 紧急开关操作
+描述：紧急停止或解除紧急停止。
+项目
+值
+topic
+dev/sub/{clientId}
+qos
+2
+type
+2010008
+data 字段
+字段
+类型
+描述
+action
+String
+EmergencyAction 枚举，见 §5.6.11
+请求示例
+{
+"id": 1686004858937364488,
+"time": 1740469352000,
+"type": "2010008",
+"data": {
+"action": "EMERGENCY_STOP"
+}
+}
+**车辆回复**：同 7.1，type 回传 2010008。
+7.9 2010009 任务控制
+描述：对正在执行的任务进行暂停、恢复、停止、改速操作。
+项目
+值
+topic
+dev/sub/{clientId}
+qos
+2
+type
+2010009
+data 字段
+字段
+类型
+描述
+action
+String
+TaskControlAction 枚举，见 §5.6.9（P1）
+taskId
+String
+目标任务 id（P1）
+reason
+String
+操作原因（可选）（P1）
+speed
+Number
+目标速度 m/s（CHANGE_SPEED 时必填）（P1）
+请求示例
+{
+"id": 1686004858937364489,
+"time": 1740469352000,
+"type": "2010009",
+"data": {
+"action": "PAUSE",
+"speed" 1.0
+}
+}
+**车辆回复**：同 7.1，type 回传 2010009。
+7.10 2010010 获取车辆地图
+7.11 2010011 日志提取
+@hasun补充地图、日志等资源更新与上传协议
+7.12 2010012 高频数据开关
+描述控制车辆是否向 `dev/pub` 发送 **1010003** 高频数据及上报哪些传感器块。支持分传感器类型开关、自动超时关闭。云平台在用户打开远程监控时下发 `ON`，并**周期重发**作为心跳；车辆若连续 `keepAlivePeriods` 个周期未收到，或 `durationSec` 到期，则自动停止 1010003。默认 `status=OFF`。
+项目
+值
+topic
+dev/sub/{clientId}
+retain
+false
+qos
+2
+type
+2010012
+默认状态
+OFF（不上报 1010003）
+data 字段
+字段
+类型
+必填
+描述
+status
+String
+是
+HighFreqStatus：ON / OFF，见 §5.6.14（P1）
+sensorTypes
+String[]
+否
+HighFreqSensorType 枚举列表，见 §5.6.15；不传表示全部（P1）
+frequencyHz
+Integer
+否
+上报频率，默认 10（P1）
+durationSec
+Integer
+否
+自动关闭时间（秒）；0=仅手动/心跳控制（P1）
+keepAlivePeriods
+Integer
+否
+心跳容忍周期数，默认 3（P1）
+heartbeatIntervalSec
+Integer
+否
+云平台重发间隔（秒），默认 5（P1）
+sensorTypes 与 1010003 字段对应
+sensorTypes
+1010003 上报内容
+RTK
+x, y, z, heading, speedMps
+TRAJECTORY
+trajectoryPoints（建议带 planType）
+OBSTACLE
+obstacles
+ULTRASONIC
+ultrasonicSense
+CHASSIS
+yaw, pitch, roll
+请求示例（开启部分传感器 + 5 分钟自动关闭）
+{
+"id": 1686004858937364492,
+"time": 1740469352000,
+"type": "2010012",
+"data": {
+"status": "ON",
+"sensorTypes": ["RTK", "TRAJECTORY", "OBSTACLE", "ULTRASONIC"],
+"frequencyHz": 10,
+"durationSec": 300,
+"keepAlivePeriods": 3,
+"heartbeatIntervalSec": 5
+}
+}
+请求示例（关闭）
+{
+"id": 1686004858937364493,
+"time": 1740469352000,
+"type": "2010012",
+"data": {
+"status": "OFF"
+}
+}
+车辆回复
+项目
+值
+topic
+dev/reply/{clientId}
+qos
+2
+type
+2010012
+{
+"id": 1686004858937364492,
+"code": 200,
+"msg": "ok",
+"time": 1740469352100,
+"type": "2010012",
+"data": {
+"status": "ON",
+"frequencyHz": 10
+}
+}
+云平台侧行为
+步骤
+说明
+1
+用户在监控页点击「开启高频」→ 下发 2010012 ON
+2
+每 `heartbeatIntervalSec` 秒重发 2010012 ON
+3
+订阅 `$share/{app}/dev/pub/+` 消费 1010003
+4
+用户关闭监控或离开页面 → 下发 2010012 OFF
+e.com/logs/LOG_REQ_001.tar.gz",
+"fileSize": 10485760,
+"logCount": 12580,
+"modules": ["TASK", "NAVIGATION", "MQTT"],
+"timeRange": { "start": 1740382952000, "end": 1740469352000 },
+"completedAt": 1740469352000,
+"failReason": ""
+}
+}
+云端 RPC 响应
+{
+"id": 1740469352006,
+"code": 200,
+"msg": "ok",
+"time": 1740469352100,
+"type": "1010006",
+"data": { "requestId": "LOG_REQ_001" }
+}
+7.13  2010013云台设备遥控
+描述：远程遥控车辆云台下发。
+项目
+值
+topic
+dev/sub/{clientId}
+qos
+2
+type
+2010005
+车辆回复
+不需要
+data 字段
+字段
+类型
+描述
+command
+String
+RemoteDriveCommand 枚举，见 §5.6.13（P1）
+speedLevel
+Integer
+速度档位（P1）
+cameraPan
+Number
+云台水平角（P1）
+cameraTilt
+Number
+云台俯仰角（P1）
+cameraZoom
+Number
+变焦倍数（P1）
+seq
+Integer
+指令序号，防乱序（P1）
+请求示例
+{
+"id": 1686004858937364485,
+"time": 1740469352000,
+"type": "2010005",
+"data": {
+"command": "FORWARD",
+"speedLevel": 2,
+"cameraPan": 15.0,
+"cameraTilt": -5.0,
+"cameraZoom": 1.5,
+"seq": 1001
+}
+}
+8 拓展说明
+8.1 能力分级
+级别
+含义
+云平台
+车端 MQTT 层
+P0
+基线，必须实现
+必须实现
+必须实现
+P1
+非导航兼容拓展
+按 8.2 实现
+按产品线实现
+P2
+导航相关载荷
+不实现
+bridge 可选
+P3
+导航模块指令
+不支持
+车端业务软件本地处理
+8.2 云端运营统计指标
+描述：车队级运营统计由**云平台自行聚合计算**，不要求车端单独上报；指标枚举见 **StatMetric（§5.6.16）**。数据源来自车辆注册库、1010001 周期状态、云平台任务记录、EMQX 上下线事件及 2010007 点位信息。
+StatMetric
+指标说明
+主要数据源
+建议刷新周期
+VEHICLE_COUNT
+车辆总数
+车辆注册表（MySQL）
+实时
+VEHICLE_COUNT_BY_MODEL
+车辆数量分布（按车型）
+注册表 vehicleModel
+60 秒
+VEHICLE_MILEAGE
+车辆里程（总里程 / 单车里程）
+1010001.vehicleInfo.vehicleOdomInfo
+60 秒
+TASK_SUCCESS_RATE
+任务成功率
+云平台任务记录
+60 秒
+SERVICE_STATION_COUNT
+服务站点数
+2010007 点位聚合
+按需 / 60 秒
+VEHICLE_PROVINCE_DISTRIBUTION
+车辆省界分布
+1010001.position 逆地理编码
+60 秒
+ONLINE_VEHICLE_LIST
+在线车辆列表
+online_status/{clientId} 上下线事件
+实时
+计算约定
+约定
+说明
+任务成功率
+云平台按任务记录统计 success / total；total=0 时记为 null
+里程
+取 1010001.vehicleInfo.vehicleOdomInfo；按 clientId 归档
+省界分布
+由 position 经纬度逆地理编码后分组计数
+在线列表
+消费 EMQX online_status，维护 clientId、上线时间、最后心跳
+站点数
+车队级为各车 2010007 点位去重并集
+云平台统计 API 响应示例（非 MQTT，供前端大屏）
+{
+"snapshotTime": 1740469352000,
+"metrics": {
+"VEHICLE_COUNT": 128,
+"VEHICLE_COUNT_BY_MODEL": {
+"PATROL_V1": 80,
+"DELIVERY_V2": 48
+},
+"VEHICLE_MILEAGE": {
+"totalKm": 158420.5,
+"avgKmPerVehicle": 1237.6
+},
+"TASK_SUCCESS_RATE": 0.94,
+"SERVICE_STATION_COUNT": 356,
+"VEHICLE_PROVINCE_DISTRIBUTION": {
+"440000": 52,
+"310000": 41,
+"110000": 35
+},
+"ONLINE_VEHICLE_LIST": [
+{ "clientId": "V001", "onlineSince": 1740468000000, "provinceCode": "440000" }
+]
+}
+}

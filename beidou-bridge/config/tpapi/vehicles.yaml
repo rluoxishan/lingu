@@ -1,0 +1,5 @@
+vehicles:
+  - vehicleId: "hasun-test"
+    clientId: "hasun-test"
+    floor: 1
+    enabled: true

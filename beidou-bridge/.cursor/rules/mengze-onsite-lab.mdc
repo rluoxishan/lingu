@@ -1,0 +1,18 @@
+---
+description: Meng Ze onsite B1 integration test - guide AI to run deployment and lab steps
+alwaysApply: false
+---
+
+# Meng Ze onsite lab (B1)
+
+When the user says they are **孟泽 (Meng Ze)** or asks for **现场联调 / 联调测试**:
+
+1. Read `docs/孟泽-AI联调助手.md` and follow the **AI execution checklist** in order.
+2. Run commands yourself (health, query-admin-device, site-start, sim:lab); do not only list steps.
+3. Bridge machine is provided by Beidou; user starts vehicle **LU2606000100** commercial edition.
+4. Use `config/site`, `scripts/site-start.bat`, Mock port **19090**.
+5. Never commit `.env` or expose passwords.
+6. Scope: **B1 read push** only; skip B2 navigation unless asked.
+
+Entry doc: `docs/孟泽-AI联调助手.md`  
+Full checklist: `docs/现场部署清单.md`

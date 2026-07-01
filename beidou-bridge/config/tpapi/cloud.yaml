@@ -1,0 +1,20 @@
+baseUrl: "https://sztu.lingubot.cn/third-party-api"
+mock: false
+timeoutMs: 10000
+tenantId: "1"
+enrichTaskFromList: false
+positionMode: "map_xy"
+apiMode: "tpapi"
+statusQueryMode: "batch"
+statusBatchPath: "/tpapi/device/get_device_detail_list"
+tpapiDeviceDetailListPath: "/tpapi/device/get_device_detail_list"
+tpapiSetTaskPointPath: "/tpapi/device/set_device_task_point"
+tpapiGetTaskPointPath: "/tpapi/device/get_device_task_point"
+auth:
+  type: "tpapi_login"
+  tpapiBaseUrl: "https://sztu.lingubot.cn/third-party-api"
+  publicKeyId: "${CLOUD_TPAPI_ID}"
+  publicKeyPath: "/tpapi/auth/public_key"
+  tpapiLoginPath: "/tpapi/auth/login"
+  username: "${CLOUD_USERNAME}"
+  password: "${CLOUD_PASSWORD}"

@@ -1,0 +1,1152 @@
+云平台-机器人通信协议
+V1.0.0
+修订历史
+Date
+Version
+Description
+Author
+Reviewed By
+Approve By
+2026-06-25
+v1.0
+Based on IOT plan, compatible with AGV (excl. navigation)
+—
+日期
+版本
+描述
+作者
+审核
+批准
+2026-06-25
+v1.0
+以 IOT 方案为基础，兼容 AGV 需求（不含导航模块）
+—
+目录
+（请在 Word/WPS 中插入自动目录：引用 → 目录 → 自动目录）
+1 编写目的
+记录 AGV / 巡检车辆与云管理平台之间的 MQTT 通信协议。
+通讯链路：云管理平台 ── IOT MQTT（dev/sub · pub · reply）──► 车端 mqtt_iot_bridge ── ROS ──► 机器人算法
+2 适用范围
+云管理平台（云服务）与车辆端 mqtt_iot_bridge 之间的 MQTT 通信；车端桥接层与算法层之间的载荷转换（见第 8 章）；前端、云端、车端开发联调参考。
+导航相关模块（定位、建图、避障、路径规划）由算法层负责，不在本协议范围内。
+3 云平台服务组件
+EMQX 5.8.4、MySQL 5.7、Redis 4.0 (1.9.1)
+组件
+版本
+EMQX
+5.8.4
+MySQL
+5.7
+Redis
+4.0 (1.9.1)
+4 IOT 交互流程
+4.1 车辆注册
+1：在云平台上注册车辆
+2：注册车辆后云平台提供秘钥文件下载
+3：将下载好秘钥文件保存到车辆指定位置
+4：给车辆配置 EMQX 服务信息
+4.2 车辆与 EMQX 建立连接
+1：车辆启动读取 EMQX 相关的配置信息：秘钥文件、服务信息
+2：车辆与 EMQX 建立连接
+3：连接建立成功/失败
+注：EMQX 使用 mysql 用户认证插件（emqx_auth_mysql）：根据 mysql 注册的用户名和密码验证连接用户是否合法。
+4.3 车辆在线离线状态
+1：车辆连接 EMQX 或断开与 EMQX 的连接会触发上线/下线事件
+2：云服务在线则实时消费上线/下线事件，改变车辆在线状态
+3：云服务离线，EMQX 将上线/下线事件保存到队列，待云服务上线后再继续消费
+注：
+● 上线事件 topic：$events/client_connected
+● 下线事件 topic：$events/client_disconnected
+● EMQX 规则引擎转发至普通 topic（设置 retain）：/mqtt/onoff/{sn}
+● 云平台共享订阅：$share/{app_name}/online_status/+
+部署时由规则引擎将 /mqtt/onoff/{sn} 转发至 online_status/{sn}，本文档统一写作 online_status/{clientId}。
+4.4 车辆接收云平台指令
+1：云服务通过 EMQX 发布订阅消息，向车辆下发指令
+2：EMQX 向 dev/sub/{clientId} 发布事件
+3：车辆监听并处理消息
+4：车辆通过 dev/reply/{clientId} 回复执行结果
+5：云服务监听 dev/reply/+ 处理回复
+4.5 车辆数据上报云平台
+1：车辆向 dev/pub/{clientId} 发布数据消息事件
+2：未及时消费的事件进入消息队列
+3：云服务消费数据消息事件并存储数据
+5 协议
+5.1 Topic 描述
+车辆端订阅 Topic
+Topic
+说明
+dev/sub/{clientId}
+订阅云服务下发事件。云服务通过此 topic 下发数据给车辆。
+车辆端发布 Topic
+Topic
+说明
+dev/reply/{clientId}
+向云服务发布回复事件。车辆收到云服务的数据后通过此 Topic 回复结果。
+dev/pub/{clientId}
+向云服务发布数据事件。车辆通过此 Topic 主动上报车辆数据：状态、任务数据等。
+云服务订阅 Topic
+Topic
+说明
+dev/reply/+
+订阅车辆回复事件。
+$share/{app_name}/dev/pub/+
+订阅车辆发布事件（共享 topic，同组内竞争消费）。
+$share/{app_name}/online_status/+
+订阅车辆上线下线事件。
+云服务发布 Topic
+Topic
+说明
+dev/sub/{clientId}
+向车辆发布事件。云服务通过此 Topic 下发数据给车辆（含 1010002 确认回复）。
+5.2 认证密钥
+车辆客户端参数设置：
+项目
+值
+ClientId
+填车辆注册时的编号
+Username
+填车辆注册时的编号
+Password
+从秘钥文件（4.1 车辆注册获取）按照规则解析出密码
+Keep Alive
+60 秒（推荐）
+注：为了安全，解析规则由双方私下约定，不在协议中展示。
+5.3 数据结构
+云平台给车辆下发的数据结构
+字段
+类型
+描述
+id
+Long
+云平台下发数据时携带的 id，车辆回复时回传（雪花算法）
+time
+Long
+消息时间戳，单位毫秒
+type
+String
+指令类型：AAABBBB，AAA 属于模块，BBB 属于指令编码
+data
+Object
+附加数据，根据业务需要承接实际数据体
+{
+"id": 1686004858937364480,
+"time": 1740469352000,
+"type": "2010001",
+"data": {}
+}
+车辆收到云平台数据回复的数据结构
+字段
+类型
+描述
+id
+Long
+回传云平台下发的 id
+code
+Integer
+200：成功；500：失败
+msg
+String
+回复描述
+time
+Long
+消息时间戳，单位毫秒
+type
+String
+回传云平台携带的 type
+data
+Object
+附加数据
+{
+"id": 1686004858937364480,
+"code": 200,
+"msg": "ok",
+"time": 1740469352100,
+"type": "2010001",
+"data": {}
+}
+车辆主动上报数据的数据结构
+字段
+类型
+描述
+id
+Long
+车辆自定义，确保短时间内每条消息的 id 不一样
+time
+Long
+消息时间戳，单位毫秒
+type
+String
+指令类型，详情见 §5.4 指令类型表
+data
+Object
+附加数据
+{
+"id": 1740469352001,
+"time": 1740469352000,
+"type": "1010001",
+"data": {}
+}
+5.4 指令类型表（持续更新）
+本协议定义的指令类型（不含导航模块的定位/建图/避障/路径规划相关指令）：
+指令发起方
+模块编码
+指令编码
+完整指令类型
+说明
+车辆
+101
+0001
+1010001
+状态上报（§6.1）
+车辆
+101
+0002
+1010002
+本地任务列表上报（§6.2）
+车辆
+101
+0004
+1010004
+故障状态上报（§6.3）
+云平台
+201
+0001
+2010001
+下发任务（§7.1）
+云平台
+201
+0002
+2010002
+修改参数（§7.2）
+云平台
+201
+0003
+2010003
+车辆出货（§7.3）
+云平台
+201
+0004
+2010004
+开启视频（§7.4）
+云平台
+201
+0005
+2010005
+遥控车辆（§7.5）
+云平台
+201
+0006
+2010006
+查看车辆配置（§7.6）
+云平台
+201
+0007
+2010007
+获取车辆点位信息（§7.7）
+云平台
+201
+0008
+2010008
+紧急开关操作（§7.8）
+云平台
+201
+0009
+2010009
+任务控制（§7.9，v1.0）
+6 车辆发起
+6.1 车辆状态信息上报
+描述：车辆 1Hz 定时上报自身的状态。
+项目
+值
+topic
+dev/pub/{clientId}
+retain
+false
+qos
+0
+type
+1010001
+data 字段（IOT 方案，原样复用）
+字段
+类型
+必填
+描述
+position
+String
+true
+车辆位置，经度,纬度（如 "114.05129,22.508236"）
+workStatus
+Integer
+true
+0：空闲；1：任务中；2：故障；3：充电；4：急停
+taskId
+String
+false
+执行任务的 id
+isInNode
+Boolean
+false
+是否停留在站点
+inNodeName
+String
+false
+当前停留站点名字
+inNodeTime
+Long
+false
+预计当前站点停留时间（秒）
+nextNodeName
+String
+false
+下一个站点名字
+nextNodeTime
+Long
+false
+预计下一站点路程时间（秒）
+battery
+Integer
+true
+车辆电量 0-100
+brakeStatus
+Integer
+true
+0：关闭；1：开启
+v1.0 拓展字段
+字段
+类型
+必填
+描述
+heading
+Number
+false
+航向角（度）
+speedMps
+Number
+false
+速度（m/s）
+taskProgress
+Integer
+false
+任务进度 0-100
+taskName
+String
+false
+ICD 任务类型
+localizationStatus
+String
+false
+定位状态：unknown/initialization/normal/gps_fault/localization_fault
+workingStatus
+String
+false
+作业状态：idle/initializing/working/pausing/fault
+planningStatus
+String
+false
+规划状态：normal/global_planning/recovery_planning/robot_stop 等
+vehicleInfo
+Object
+false
+硬件摘要（来自 zwj_hardware_response）
+sensorStatus
+Object
+false
+传感器在线状态
+faultSummary
+Object
+false
+故障摘要（hasFault/faultCount/highestLevel）
+请求示例
+{
+"id": 1740469352001,
+"time": 1740469352000,
+"type": "1010001",
+"data": {
+"position": "114.05129,22.508236",
+"workStatus": 1,
+"taskId": "T001",
+"isInNode": false,
+"battery": 85,
+"brakeStatus": 0,
+"heading": 81.85,
+"speedMps": 0.5,
+"taskProgress": 42,
+"taskName": "PATROL",
+"localizationStatus": "normal",
+"workingStatus": "working",
+"planningStatus": "normal",
+"faultSummary": {
+"hasFault": false,
+"faultCount": 0,
+"highestFaultLevel": 1
+}
+}
+}
+云平台回复：无需回复。
+6.2 车辆上报本地配置的任务列表
+描述：车辆上报本地配置的任务列表。未上传或者更新过后要执行上传动作。
+项目
+值
+topic
+dev/pub/{clientId}
+retain
+false
+qos
+2
+type
+1010002
+data 每项字段（与 §7.1 任务 data 相同）
+字段
+类型
+描述
+taskId
+String
+任务 id
+taskName
+String
+任务名称
+returnPoint
+String
+返航点
+active
+Boolean
+是否开启。True：开启；False：关闭
+cycleDays
+Integer[]
+循环天数
+cycleType
+String
+EVERY_WEEK：每周；ODD_WEEK：单周；EVEN_WEEK：双周
+executionMode
+String
+IMMEDIATE：立即执行；SCHEDULED：计划任务
+startTime
+String
+执行时间，hh:mm
+taskNodes
+List[obj]
+任务节点信息
+上报示例
+{
+"id": 1740469352002,
+"time": 1740469352000,
+"type": "1010002",
+"data": [
+{
+"taskId": "LOCAL001",
+"taskName": "早班巡检",
+"returnPoint": "充电站1",
+"active": true,
+"cycleDays": [
+1,
+2,
+3,
+4,
+5
+],
+"cycleType": "EVERY_WEEK",
+"executionMode": "SCHEDULED",
+"startTime": "08:00",
+"taskNodes": [
+{
+"order": 1,
+"taskPoint": "站点A",
+"duration": "60"
+},
+{
+"order": 2,
+"taskPoint": "站点B",
+"duration": "0"
+}
+]
+}
+]
+}
+云平台回复
+项目
+值
+topic
+dev/sub/{clientId}
+retain
+false
+qos
+2
+字段
+类型
+描述
+id
+Long
+回传车辆上报 id
+time
+Long
+消息时间戳，单位毫秒
+type
+String
+1010002
+data.code
+Integer
+200：成功；500：失败
+data.msg
+String
+描述
+{
+"id": 1740469352002,
+"time": 1740469352100,
+"type": "1010002",
+"data": {
+"code": 200,
+"msg": "ok"
+}
+}
+6.3 故障状态上报
+描述：有活动故障时 1Hz 持续上报。告警推送、故障统计由云平台负责。
+项目
+值
+topic
+dev/pub/{clientId}
+qos
+1
+type
+1010004
+频率
+有故障时 1Hz
+data 字段
+字段
+类型
+描述
+dataType
+String
+固定 FAULT_STATE
+hasFault
+Boolean
+是否有故障
+faultCount
+Integer
+故障数量
+highestFaultLevel
+Integer
+最高故障等级（1=OK, 2=WARN, 3=ERROR, 4=FATAL）
+faultInfo
+Array
+故障详情列表
+faultInfo 项
+字段
+类型
+描述
+faultLevel
+Integer
+故障等级（1-4）
+faultId
+String
+故障 id
+faultDescription
+String
+描述
+voiceSpecialProcessing
+String
+语音处理
+lightSpecialProcessing
+String
+灯光处理
+{
+"id": 1740469352004,
+"time": 1740469352000,
+"type": "1010004",
+"data": {
+"dataType": "FAULT_STATE",
+"hasFault": true,
+"faultCount": 2,
+"highestFaultLevel": 3,
+"faultInfo": [
+{
+"faultLevel": 3,
+"faultId": "F001",
+"faultDescription": "GPS信号丢失",
+"voiceSpecialProcessing": "请前往空旷区域",
+"lightSpecialProcessing": "开启双闪灯"
+}
+]
+}
+}
+云平台回复：无需回复。
+7 云平台发起
+除 §7.5 遥控外，所有指令 qos=2，车辆应在 5 秒内通过 dev/reply/{clientId} 回复。
+7.1 下发任务
+描述：下发任务给车辆立即执行。
+项目
+值
+topic
+dev/sub/{clientId}
+retain
+false
+qos
+2
+type
+2010001
+data 字段（IOT 方案）
+字段
+类型
+描述
+taskId
+String
+任务 id
+taskName
+String
+任务名称
+returnPoint
+String
+返航点
+active
+Boolean
+是否开启
+cycleDays
+Integer[]
+循环天数
+cycleType
+String
+EVERY_WEEK / ODD_WEEK / EVEN_WEEK
+executionMode
+String
+IMMEDIATE / SCHEDULED
+startTime
+String
+执行时间 hh:mm
+taskNodes
+List[obj]
+任务节点信息
+returnPoint 节点
+字段
+类型
+描述
+tasktype
+Integer
+返航点类型：0：无效；1：导航点；2：充电点
+x
+double
+坐标 x
+y
+double
+坐标 y
+z
+double
+坐标航向四元素 z
+w
+double
+坐标航向四元素 w
+taskNodes 节点（IOT 基础）
+字段
+类型
+描述
+order
+Integer
+节点顺序
+taskPoint
+String
+节点名字
+duration
+String
+停留时间
+taskNodes 拓展 A：坐标
+字段
+类型
+描述
+x
+double
+坐标 x（拓展 A）
+y
+double
+坐标 y（拓展 A）
+z
+double
+坐标航向四元素 z（拓展 A）
+w
+double
+坐标航向四元素 w（拓展 A）
+请求示例
+{
+"id": 1686004858937364480,
+"time": 1740469352000,
+"type": "2010001",
+"data": {
+"taskId": "T001",
+"taskName": "早班巡检",
+"returnPoint": "充电站1",
+"active": true,
+"executionMode": "IMMEDIATE",
+"cycleDays": [
+1,
+2,
+3,
+4,
+5
+],
+"cycleType": "EVERY_WEEK",
+"startTime": "08:00",
+"taskNodes": [
+{
+"order": 1,
+"taskPoint": "站点A",
+"duration": "60",
+"x": 21.64,
+"y": 86.28,
+"z": 0.694,
+"w": 0.719
+},
+{
+"order": 2,
+"taskPoint": "站点B",
+"duration": "0",
+"x": 35.2,
+"y": 92.15,
+"z": 0.0,
+"w": 1.0
+}
+]
+}
+}
+拓展 B：taskSteps 组合任务
+字段
+类型
+描述
+order
+Integer
+步骤顺序
+stepType
+String
+GOAL_NAV / ACTION / CHARGING / INITIAL
+taskPoint
+String
+目标点名称（GOAL_NAV/CHARGING 时）
+duration
+String
+停留时间（秒）
+actionType
+String
+动作类型（ACTION 步骤：wait_sec / forward_m / rotate_rad）
+x
+double
+坐标 x
+y
+double
+坐标 y
+z
+double
+坐标航向四元素 z
+w
+double
+坐标航向四元素 w
+stepType 枚举：GOAL_NAV（目标点导航）、ACTION（动作任务）、CHARGING（充电）、INITIAL（初始化/切图）
+actionType 枚举：wait_sec（暂停 N 秒）、forward_m（定距前进/后退）、rotate_rad（定角旋转）
+{
+"id": 1686004858937364481,
+"time": 1740469352000,
+"type": "2010001",
+"data": {
+"taskId": "T002",
+"taskName": "巡检组合",
+"executionMode": "IMMEDIATE",
+"taskSteps": [
+{
+"order": 1,
+"stepType": "GOAL_NAV",
+"taskPoint": "A",
+"duration": "30",
+"x": 21.64,
+"y": 86.28,
+"z": 0.694,
+"w": 0.719
+},
+{
+"order": 2,
+"stepType": "ACTION",
+"actionType": "rotate_rad",
+"angle_rad": 1.57
+},
+{
+"order": 3,
+"stepType": "CHARGING",
+"taskPoint": "充电站1",
+"x": 10,
+"y": 5,
+"z": 0,
+"w": 1
+}
+]
+}
+}
+拓展 C：ICD 直传
+data 含 ICD JSON（type: start_task 等）时 bridge 原样转发 ROS，信封仍用 2010001。
+车辆回复
+项目
+值
+topic
+dev/reply/{clientId}
+retain
+false
+qos
+2
+字段
+类型
+描述
+id
+Long
+回传云平台下发的 id
+time
+Long
+消息时间戳，单位毫秒
+type
+String
+2010001
+data.code
+Integer
+200：成功；500：失败
+data.msg
+String
+描述
+7.2 修改配置
+描述：修改车辆配置，例如车灯、雷达、或者文件配置。
+项目
+值
+topic
+dev/sub/{clientId}
+retain
+false
+qos
+2
+type
+2010002
+data 字段（IOT 方案 flat 结构）
+字段
+类型
+描述
+brake
+Integer
+1：开启制动；0：取消制动
+headlights
+Integer
+1：开启；0：关闭
+ultrasonic
+Integer
+1：开启；0：关闭
+screen
+Integer
+1：开启；0：关闭
+turnSignals
+Integer
+0：全灭；1：左转；2：右转；3：双闪
+拓展：target 设备控制模型
+字段
+类型
+描述
+target
+String
+ARM / GIMBAL / CONTAINER / AUDIO / LIGHT / POWER
+command
+String
+SET / GET / 具体操作指令
+params
+Object
+操作参数（如 {pan: 15, tilt: -5}）
+target 枚举：ARM（机械臂）、GIMBAL（云台）、CONTAINER（货柜）、AUDIO（声音/语音）、LIGHT（灯光）、POWER（电源/传感器供电）
+{
+"id": 1686004858937364480,
+"time": 1740469352000,
+"type": "2010002",
+"data": {
+"target": "GIMBAL",
+"command": "SET",
+"params": {
+"pan": 15,
+"tilt": -5,
+"zoom": 1.5
+}
+}
+}
+拓展：离线策略（通信中断时车辆行为）
+字段
+类型
+描述
+offlineStrategy
+String
+CONTINUE：断线继续；PAUSE：暂停等待；RETURN_CHARGE：返回充电
+车辆回复
+项目
+值
+topic
+dev/reply/{clientId}
+qos
+2
+type
+2010002
+字段
+类型
+描述
+code
+Integer
+200：成功；500：失败
+msg
+String
+描述
+7.3 通知出货
+描述：通知带有货柜的车辆出货。
+项目
+值
+topic
+dev/sub/{clientId}
+qos
+2
+type
+2010003
+data 字段
+字段
+类型
+描述
+orderId
+String
+订单 id
+车辆回复：同 §7.1，type 回传 2010003。
+7.4 视频监控开关
+描述：车辆视频推流开关。当开启时该指令以一定的周期向车辆定时发送。车辆如果间隔 n 个周期没收到该指令则关闭推流。如果车辆发现推流地址有变化则修改推流地址。
+项目
+值
+topic
+dev/sub/{clientId}
+qos
+2
+type
+2010004
+data 字段
+字段
+类型
+描述
+status
+Integer
+1：开启；0：关闭
+view
+Integer
+1：前摄像头；2：右；3：后；4：左
+url
+String
+推流地址
+车辆回复：同 §7.1，type 回传 2010004。
+7.5 遥控
+描述：远程遥控车辆指令。
+项目
+值
+topic
+dev/sub/{clientId}
+qos
+2
+type
+2010005
+data 字段
+字段
+类型
+描述
+speed
+Integer
+速度
+angle
+Integer
+角度
+v1.0 拓展字段
+字段
+类型
+描述
+command
+String
+FORWARD / BACKWARD / LEFT / RIGHT / STOP / EMERGENCY_STOP / PAUSE
+speedLevel
+Integer
+速度档位
+cameraPan
+Number
+云台水平角
+cameraTilt
+Number
+云台俯仰角
+cameraZoom
+Number
+变焦倍数
+seq
+Integer
+指令序号（防乱序）
+车辆回复：无需回复（IOT 方案 §7.5）。
+7.6 查看车辆配置
+描述：查看车辆配置。
+项目
+值
+topic
+dev/sub/{clientId}
+qos
+2
+type
+2010006
+data 字段
+字段
+类型
+描述
+name
+String
+参数名
+回复 data（type 回传 2010006）
+字段
+类型
+描述
+brake
+Integer
+1：紧急制动；0：正常
+headlights
+Integer
+1：开启；0：关闭
+ultrasonic
+Integer
+1：开启；0：关闭
+screen
+Integer
+1：开启；0：关闭
+turnSignals
+Integer
+0：全灭；1：左转；2：右转；3：双闪
+7.7 获取车辆点位信息
+描述：获取车辆当前所有点位信息。
+项目
+值
+topic
+dev/sub/{clientId}
+qos
+2
+type
+2010007
+请求
+data 可为空对象 {}。
+回复 data（type 回传 2010007）
+IOT 格式：JSONArray 字符串列表（如 ["点位1", "点位2"]）。v1.0 拓展：追加 points[] 结构化坐标，保留字符串列表兼容。
+7.8 紧急开关操作
+描述：紧急停止或解除。
+项目
+值
+topic
+dev/sub/{clientId}
+qos
+2
+type
+2010008
+data 字段
+字段
+类型
+描述
+action
+String
+EMERGENCY_STOP / RELEASE
+车辆回复：同 §7.1，type 回传 2010008。
+7.9 任务控制（v1.0）
+描述：对正在执行的任务进行暂停、恢复、停止、改速操作。映射 ICD suspend/resume/stop/change_task。
+项目
+值
+topic
+dev/sub/{clientId}
+qos
+2
+type
+2010009
+字段
+类型
+描述
+action
+String
+PAUSE / RESUME / CANCEL / CHANGE_SPEED
+taskId
+String
+目标任务 id
+reason
+String
+操作原因（可选）
+speed
+Number
+目标速度 m/s（CHANGE_SPEED 时必填）
+{
+"id": 1686004858937364480,
+"time": 1740469352000,
+"type": "2010009",
+"data": {
+"action": "PAUSE",
+"taskId": "T20250606001",
+"reason": "临时避让"
+}
+}
+车辆回复：同 §7.1，type 回传 2010009。
+8 拓展说明
+本章汇总在 IOT 方案基础上追加的能力。导航相关模块（定位/建图/避障/路径规划）由算法层负责，不在本协议范围。
+8.1 组合任务 taskSteps
+在 IOT taskNodes 的基础上，v1.0 追加 taskSteps 数组，支持以下步骤类型的混合编排：
+字段
+类型
+描述
+GOAL_NAV
+目标点导航 → ICD start_task + goal_nav
+ACTION
+动作任务 → ICD debug_custom_action（wait_sec / forward_m / rotate_rad）
+CHARGING
+充电 → ICD go_charging
+INITIAL
+初始化/切图 → ICD start_initial
+有 taskSteps 时按步骤顺序执行；仅有 taskNodes 时按 IOT 方案逻辑处理。
+8.2 设备控制 target 模型
+在 2010002 IOT flat 字段外，追加 target + command + params 扩展设备控制：
+字段
+类型
+描述
+ARM
+机械臂
+GIMBAL
+云台（pan/tilt/zoom）
+CONTAINER
+货柜（门/机构控制，出货见 2010003）
+AUDIO
+声音/语音播报
+LIGHT
+灯光/转向灯（与 flat 字段等效）
+POWER
+电源/传感器供电
+8.3 离线策略
+通过 2010002 下发离线策略，控制车辆在 MQTT 通信中断时的自主行为：
+字段
+类型
+描述
+CONTINUE
+通信中断后继续执行当前任务，缓存遥测数据待重连后回放
+PAUSE
+通信中断后安全停靠最近节点，等待重连
+RETURN_CHARGE
+通信中断后自动导航至充电站/Home 点等待
+注意：车辆本地安全保障（急停按钮、碰撞检测）不受通信状态影响。
+8.4 ICD 直传
+2010001 的 data 中如果包含 ICD JSON（type: start_task 等），mqtt_iot_bridge 将原样转发 ROS，信封仍使用 2010001。适用于平台直接下发 ICD 指令的场景。
+8.5 车端桥接层（mqtt_iot_bridge）
+IOT 方案未涉及 ROS；v1.0 定义 mqtt_iot_bridge 负责 MQTT ↔ ROS ICD 载荷转换：
+下行：dev/sub → PayloadAdapter → /swj/swj_request_srv（Service）/ /swj/swj_request_msg（Topic）
+上行：/zwj/zwj_response + /zwj/zwj_hardware_response + /zwj/zwj_fault_response → 缓存 → dev/pub（1010001/1010004）
+ROS 接口速查：start_task / start_initial / suspend_task / resume_task / stop_task / change_task / device_control
+8.6 状态映射
+平台任务状态（6 个简化状态）与 ICD workingStatus 映射：
+字段
+类型
+描述
+PENDING
+待下发 → EXECUTING（code=200）
+EXECUTING
+执行中 → PAUSED / COMPLETED / FAILED / CANCELLED
+PAUSED
+已暂停 → EXECUTING（RESUME）/ CANCELLED
+COMPLETED
+已完成（workingStatus=idle 且 taskProgress=100）
+FAILED
+失败（workingStatus=fault 或规划失败）
+CANCELLED
+已取消（2010009 CANCEL）
+workStatus 映射（IOT Integer → ICD string）：idle→0, working/initializing→1, fault→2, vehicleChargingStatus=1→3, emergency_stop→4
+drivingMode 映射：auto_drive→自动模式, manual_drive→手动模式, remote_drive→遥控模式（2010005 遥控期间）
+附录：相关文档
+● 《协议概述与通信基础》 ● 《周期性状态上报》 ● 《车端事件上报》 ● 《云平台下发指令》
+● 《枚举与错误码定义》 ● 《MQTT ↔ ROS ICD 载荷映射》 ● 《状态机设计》 ● 《协议拓展说明》

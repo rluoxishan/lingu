@@ -1,0 +1,39 @@
+# 依赖
+node_modules/
+.pnpm-store/
+
+# 构建产物
+dist/
+build/
+.output/
+.nuxt/
+.vite/
+
+# 环境与密钥（勿提交）
+.env
+.env.*
+!.env.example
+
+# 日志与临时文件
+*.log
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# 本地数据 / 联调产物
+beidou-bridge/data-sim/
+beidou-bridge/data/
+beidou-bridge/data-site/
+beidou-bridge/data-tpapi/
+beidou-bridge/release/
+
+# 文档临时提取
+**/_proto.zip
+**/_proto_extract/
+**/*.docx.bak
