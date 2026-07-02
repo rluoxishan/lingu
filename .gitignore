@@ -33,7 +33,10 @@ beidou-bridge/data-site/
 beidou-bridge/data-tpapi/
 beidou-bridge/release/
 
-# 文档临时提取
+# Python
+**/__pycache__/
+*.pyc
+
 **/_proto.zip
 **/_proto_extract/
 **/*.docx.bak

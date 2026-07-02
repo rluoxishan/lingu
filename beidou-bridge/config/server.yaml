@@ -1,3 +1,6 @@
+# 默认开发配置：走云平台 HTTP
+dataSource: cloud
+
 server:
   host: "0.0.0.0"
   port: 8080

@@ -1,7 +1,8 @@
 import type { AppConfig, BeidouCallbackRegistration, CloudVehicleStatus } from "../models/types.js";
+import { getPositionMode } from "../config/loadConfig.js";
 import { getPushTargets } from "../config/pushTargets.js";
 import { BeidouClient } from "../clients/beidouClient.js";
-import { CloudClient } from "../clients/cloudClient.js";
+import type { VehicleDataSource } from "../clients/vehicleDataSource.js";
 import { mapStatusToBeidou } from "../mapper/statusMapper.js";
 import { CallbackStore } from "../store/callbackStore.js";
 
@@ -14,7 +15,7 @@ export class PushScheduler {
   constructor(
     private readonly config: AppConfig,
     private readonly callbackStore: CallbackStore,
-    private readonly cloudClient: CloudClient,
+    private readonly vehicleDataSource: VehicleDataSource,
     private readonly beidouClient: BeidouClient,
   ) {}
 
@@ -71,7 +72,7 @@ export class PushScheduler {
 
       let statusMap: Map<string, CloudVehicleStatus>;
       try {
-        statusMap = await this.cloudClient.fetchVehicleStatuses(vehicleIds);
+        statusMap = await this.vehicleDataSource.fetchVehicleStatuses(vehicleIds);
       } catch (error) {
         console.error("[scheduler] batch fetch vehicle statuses failed", error);
         return;
@@ -96,7 +97,7 @@ export class PushScheduler {
 
         try {
           const payload = {
-            data: mapStatusToBeidou(status, vehicle, this.config.cloud),
+            data: mapStatusToBeidou(status, vehicle, getPositionMode(this.config)),
             timestamp: Date.now(),
           };
 

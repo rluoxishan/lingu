@@ -1,7 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import yaml from "js-yaml";
-import type { AppConfig, CloudAuthConfig, CloudConfig, VehiclesConfig } from "../models/types.js";
+import type {
+  AppConfig,
+  CloudAuthConfig,
+  CloudConfig,
+  DataSourceMode,
+  MqttConfig,
+  VehiclesConfig,
+} from "../models/types.js";
 
 function readYaml<T>(filePath: string): T {
   const raw = fs.readFileSync(filePath, "utf8");
@@ -50,11 +57,47 @@ function hydrateCloud(cloud: CloudConfig | undefined): CloudConfig {
   };
 }
 
+function hydrateMqtt(mqtt: MqttConfig | undefined): MqttConfig {
+  if (!mqtt?.brokerUrl) {
+    throw new Error("config/mqtt.yaml: missing brokerUrl (required when dataSource=mqtt)");
+  }
+  return {
+    brokerUrl: resolveEnv(mqtt.brokerUrl),
+    clientId: mqtt.clientId ?? "beidou-bridge",
+    username: mqtt.username ? resolveEnv(mqtt.username) : "",
+    password: mqtt.password ? resolveEnv(mqtt.password) : "",
+    positionMode: mqtt.positionMode ?? "lonlat",
+    subscribeTopicPattern: mqtt.subscribeTopicPattern ?? "dev/pub/{clientId}",
+    publishTopicPattern: mqtt.publishTopicPattern ?? "dev/sub/{clientId}",
+    staleThresholdMs: mqtt.staleThresholdMs ?? 15000,
+  };
+}
+
+export function getPositionMode(config: AppConfig): "lonlat" | "map_xy" {
+  if (config.dataSource === "mqtt") {
+    return config.mqtt?.positionMode ?? "lonlat";
+  }
+  return config.cloud?.positionMode ?? "lonlat";
+}
+
 export function loadConfig(configDir: string): AppConfig {
-  const serverRaw = readYaml<Omit<AppConfig, "cloud" | "vehicles">>(
-    path.join(configDir, "server.yaml"),
-  );
-  const cloud = hydrateCloud(readYaml<CloudConfig>(path.join(configDir, "cloud.yaml")));
+  const serverRaw = readYaml<
+    Omit<AppConfig, "cloud" | "mqtt" | "vehicles"> & { dataSource?: DataSourceMode }
+  >(path.join(configDir, "server.yaml"));
+  const dataSource: DataSourceMode = serverRaw.dataSource ?? "cloud";
+
+  let cloud: CloudConfig | undefined;
+  let mqtt: MqttConfig | undefined;
+
+  if (dataSource === "mqtt") {
+    const mqttPath = path.join(configDir, "mqtt.yaml");
+    if (!fs.existsSync(mqttPath)) {
+      throw new Error(`dataSource=mqtt requires ${mqttPath}`);
+    }
+    mqtt = hydrateMqtt(readYaml<MqttConfig>(mqttPath));
+  } else {
+    cloud = hydrateCloud(readYaml<CloudConfig>(path.join(configDir, "cloud.yaml")));
+  }
   const vehiclesFile = readYaml<VehiclesConfig>(path.join(configDir, "vehicles.yaml"));
 
   const push = {
@@ -67,8 +110,10 @@ export function loadConfig(configDir: string): AppConfig {
 
   return {
     ...serverRaw,
+    dataSource,
     push,
     cloud,
+    mqtt,
     vehicles: vehiclesFile.vehicles,
   };
 }

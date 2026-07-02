@@ -2,7 +2,9 @@ import type { FastifyInstance } from "fastify";
 import type { AppConfig, BeidouNavigationRequest, RegisterCallbackBody } from "../../models/types.js";
 import { getEnabledVehicles } from "../../config/loadConfig.js";
 import { isVehicleAllowed } from "../../config/pushTargets.js";
-import { CloudApiError, CloudClient } from "../../clients/cloudClient.js";
+import { CloudApiError } from "../../clients/cloudClient.js";
+import { VehicleDataSourceError } from "../../clients/mqttVehicleDataSource.js";
+import type { VehicleDataSource } from "../../clients/vehicleDataSource.js";
 import { CallbackStore } from "../../store/callbackStore.js";
 import { PushScheduler, describeRegistrationChanges, isSameRegisterRequest, sameVehicleIds } from "../../scheduler/pushScheduler.js";
 import { fail, ok } from "../response.js";
@@ -10,7 +12,8 @@ import { fail, ok } from "../response.js";
 export interface RouteDeps {
   config: AppConfig;
   callbackStore: CallbackStore;
-  cloudClient: CloudClient;
+  vehicleDataSource: VehicleDataSource;
+  mqttConnected?: () => boolean | null;
   pushScheduler: PushScheduler;
 }
 
@@ -19,7 +22,11 @@ function resolveProjectVehicleIds(config: AppConfig): string[] {
 }
 
 export function registerBeidouRoutes(app: FastifyInstance, deps: RouteDeps): void {
-  app.get("/health", async () => ({ status: "up" }));
+  app.get("/health", async () => ({
+    status: "up",
+    dataSource: deps.config.dataSource,
+    mqttConnected: deps.mqttConnected?.() ?? null,
+  }));
 
   app.post<{ Body: RegisterCallbackBody }>(
     "/api/v1/beidou/callback/register",
@@ -61,13 +68,13 @@ export function registerBeidouRoutes(app: FastifyInstance, deps: RouteDeps): voi
 
       let vehicles;
       try {
-        vehicles = await deps.cloudClient.fetchVehicleInfosForRegister(vehicleIds);
+        vehicles = await deps.vehicleDataSource.fetchVehicleInfosForRegister(vehicleIds);
       } catch (error) {
-        if (error instanceof CloudApiError) {
+        if (error instanceof CloudApiError || error instanceof VehicleDataSourceError) {
           return reply.status(502).send(fail(502, error.message));
         }
         request.log.error(error);
-        return reply.status(500).send(fail(500, "failed to fetch vehicle info from cloud"));
+        return reply.status(500).send(fail(500, "failed to fetch vehicle info"));
       }
 
       if (refreshOnly && prevRegistration) {
@@ -139,16 +146,19 @@ export function registerBeidouRoutes(app: FastifyInstance, deps: RouteDeps): voi
       }
 
       try {
-        const result = await deps.cloudClient.dispatchImmediateNavigation(body);
+        const result = await deps.vehicleDataSource.dispatchImmediateNavigation(body);
         return ok({
           vehicleId: body.vehicleId,
           cloudTaskId: result.cloudTaskId,
           acceptedAt: result.acceptedAt,
         });
       } catch (error) {
-        if (error instanceof CloudApiError) {
+        if (error instanceof CloudApiError || error instanceof VehicleDataSourceError) {
           if (error.statusCode === 404) {
             return reply.status(404).send(fail(404, error.message));
+          }
+          if (error.statusCode === 400) {
+            return reply.status(400).send(fail(400, error.message));
           }
           return reply.status(502).send(fail(502, error.message));
         }

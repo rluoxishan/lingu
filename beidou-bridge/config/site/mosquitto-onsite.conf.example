@@ -1,0 +1,7 @@
+# 中转机 Mosquitto 联调配置示例（复制到安装目录 mosquitto.conf 末尾）
+listener 1883 0.0.0.0
+allow_anonymous true
+
+# 正式环境建议改为：
+# allow_anonymous false
+# password_file C:/Program Files/mosquitto/passwd

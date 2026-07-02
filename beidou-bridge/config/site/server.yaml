@@ -1,3 +1,6 @@
+# cloud=云平台 HTTP（实验室）；mqtt=车端 5G 直连（中转机无外网现场）
+dataSource: mqtt
+
 server:
   host: "0.0.0.0"
   port: 8080

@@ -179,24 +179,14 @@ remote-monitor/
 
 ## 更新 md 后重新生成 Word
 
-
-
 ```powershell
-
-npx --yes @mohtasham/md-to-docx `
-
-  "c:\Users\Administrator\Desktop\lingu\remote-monitor\docs\protocol\吉狮-远程监控与控制协议-V1.0-draft.md" `
-
-  "c:\Users\Administrator\Desktop\lingu\remote-monitor\docs\protocol\吉狮-远程监控与控制协议-V1.0-draft.docx"
-
-
-
-npx --yes @mohtasham/md-to-docx `
-
-  "c:\Users\Administrator\Desktop\lingu\remote-monitor\docs\前端-协议字段对照-评审表.md" `
-
-  "c:\Users\Administrator\Desktop\lingu\remote-monitor\docs\前端-协议字段对照-评审表.docx"
-
+cd remote-monitor/scripts
+python build-protocol-docx.py
+# 或
+node build-protocol-docx.mjs
 ```
 
+默认输入：`docs/灵鱿科技远程监控与控制协议-V1.0.0.md`  
+输出同目录 `.docx`（含标题大纲、自动目录域、统一字体、表格列宽）。
 
+**打开 Word 后**：右键目录区域 → **更新域**，即可生成可点击目录并启用左侧导航窗。

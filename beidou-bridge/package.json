@@ -21,6 +21,12 @@
     "sim:lab": "powershell -ExecutionPolicy Bypass -File scripts/run-simulation-lab.ps1",
     "sim:lab:mock": "powershell -ExecutionPolicy Bypass -File scripts/run-simulation-lab.ps1 -MockCloudLab",
     "sim:monitor": "powershell -ExecutionPolicy Bypass -File scripts/run-simulation-lab.ps1 -MonitorOnly",
+    "sim:mqtt:relay": "powershell -ExecutionPolicy Bypass -File scripts/run-mqtt-lab-relay.ps1",
+    "sim:vehicle-mqtt": "node scripts/sim/vehicle-mqtt-simulator.mjs",
+    "prepare:offline-usb": "powershell -ExecutionPolicy Bypass -File scripts/prepare-offline-usb.ps1 -BuildZip",
+    "test:mqtt-lab": "powershell -ExecutionPolicy Bypass -File scripts/run-mqtt-lab-automated.ps1",
+    "docs:mqtt-guide": "python scripts/build-mqtt-onsite-full-guide-docx.py",
+    "docs:site-startup": "python scripts/build-site-startup-guide-docx.py",
     "sim:write": "powershell -ExecutionPolicy Bypass -File scripts/sim/write-path-test.ps1",
     "package:site": "powershell -ExecutionPolicy Bypass -File scripts/package-site-release.ps1",
     "install:windows": "powershell -ExecutionPolicy Bypass -File scripts/windows/install.ps1",
@@ -32,11 +38,13 @@
   },
   "dependencies": {
     "fastify": "^5.2.1",
-    "js-yaml": "^4.1.0"
+    "js-yaml": "^4.1.0",
+    "mqtt": "^5.10.3"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.10.2",
+    "aedes": "^1.1.1",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }

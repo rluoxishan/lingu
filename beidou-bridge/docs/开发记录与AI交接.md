@@ -1,6 +1,6 @@
 # 开发记录与 AI 交接文档
 
-> **最后更新**：2026-06-30（V2.3 模拟实验室验收 + 接北斗前交接）  
+> **最后更新**：2026-07-02（V2.4 MQTT 无外网现场 + 真北斗 B1 验收）  
 > **项目**：beidou-bridge（云平台 ↔ 中转程序 ↔ 北斗系统）  
 > **用途**：给后续开发者或 **另一个 AI 会话** 快速接手；读完本文应能立刻知道做了什么、在哪改、下一步做什么  
 
@@ -11,12 +11,13 @@
 | 项 | 内容 |
 |----|------|
 | **是什么** | Node.js/TypeScript HTTP 中转：云 API 读状态 → 推北斗；北斗反控 → 云 2010001 |
-| **仓库** | https://192-168-0-128.lingubot.direct.quickconnect.cn:5001/git/platform_software/Beidou_bridge |
+| **仓库** | https://github.com/rluoxishan/lingu.git（`beidou-bridge/` 子目录） |
 | **开发分支** | `develop`（日常提交 push 这里） |
 | **稳定分支** | `master`（测试通过后 merge） |
 | **技术栈** | Node 20+、TypeScript、Fastify |
-| **当前阶段** | **A ✅**；**Mock 实验室读链路 ✅**；**B1 现场**（admin + LU2606000100 + 真/Mock 北斗）；**B2 反控** ⚠️ 云 instructions 超时 |
-| **联调测试车** | **现场 admin**：`LU2606000100`；**本地 tpapi**：`hasun-test`（勿混用） |
+| **当前阶段** | **MQTT 无外网现场 ✅ 模拟+B1**；真车 `LU2605000922` 待联调；**B2 反控** 未测 |
+| **联调测试车** | **MQTT 现场**：`LU2605000922`；**admin 实验室**：`LU2606000100`；**tpapi**：`hasun-test` |
+| **MQTT 现场** | [MQTT现场对接指南.md](./MQTT现场对接指南.md) · [中转机离线部署手册-MQTT模式.md](./中转机离线部署手册-MQTT模式.md) |
 | **模拟联调** | [模拟联调实验室.md](./模拟联调实验室.md)（Mock北斗+真云，接真北斗前） |
 | **现场联调** | [到场前准备.md](./到场前准备.md) → [现场联调检查表.md](./现场联调检查表.md) |
 | **字段/枚举** | [1010001字段与北斗映射.md](./1010001字段与北斗映射.md) |
@@ -28,10 +29,9 @@
 ```powershell
 git pull origin master   # 或 develop
 cd beidou-bridge && npm ci && npm run build
-# 读：本文 §0 → 到场前准备 → 现场联调检查表 → 1010001字段与北斗映射
-# 出发前：npm run pre-site:install && npm run pre-site:b1   # 真云+LU2606000100+Mock
-# 或占位 .env 时：npm run sim:lab:mock                      # Mock云+Mock北斗，验读链路
-# 接真北斗前：npm run sim:lab（真云）通过 → 现场 site-start.bat → register 换北斗 url
+# 读：本文 §0 → MQTT现场对接指南 → 中转机启动与加车操作手册.docx
+# MQTT 实验室：npm run test:mqtt-lab
+# 现场：START-bridge.bat → register → 真车/模拟 1010001
 ```
 
 ---
@@ -784,6 +784,52 @@ push:
 | taskId | "0" | currentTask ⚠️ |
 
 **结论**：云 HTTP 字段通路 OK，**B1 链路可验**；坐标/朝向待孟泽商用版 + 定位。
+
+### 2026-07-02：MQTT 无外网现场 + 真北斗 B1（AI 会话）
+
+| 变更 | 说明 |
+|------|------|
+| **架构** | `dataSource: mqtt`：车端 5G → 中转机 Mosquitto → bridge 订阅 1010001 → HTTP 推北斗；**不访问云平台** |
+| **代码** | `MqttVehicleDataSource`、`vehicleStatusStore`、`mqtt1010001Mapper`；`VehicleDataSource` 抽象 cloud/mqtt |
+| **配置** | `config/site/mqtt.yaml`；`config/site/server.yaml` → `dataSource: mqtt`；现场车 **`LU2605000922`** |
+| **脚本/bat** | `START-bridge.bat`、`SIMULATE-vehicle.bat`、`CHECK-env.bat`、`OPEN-firewall-*.bat`、离线 U 盘打包 |
+| **测试** | `npm run test:mqtt-lab`（自动化 MQTT 实验室） |
+| **文档** | MQTT 部署/对接/启动 Word；[MQTT现场对接指南.md](./MQTT现场对接指南.md) |
+| **现场验收** | 5G 模拟 + 北斗 register + 定时推送 **已通过**；真车 LU2605000922 **待联调** |
+
+**现场地址（2026-07-02）**
+
+| 项 | 值 |
+|----|-----|
+| 中转机 | `192.168.199.88:8080` |
+| Mosquitto | `192.168.199.88:1883` |
+| 北斗回调 | `http://192.168.199.89:7055/patroL_vehicle/V1/vehicle/data` |
+| 现场车 SN | `LU2605000922` |
+
+**加车（不改代码）**
+
+1. 编辑 `config/site/vehicles.yaml`（`vehicleId` = `clientId` = 车端 SN）  
+2. 重启 `START-bridge.bat`  
+3. 重新 `POST /api/v1/beidou/callback/register`  
+
+**关键文件**
+
+| 文件 | 职责 |
+|------|------|
+| `src/clients/mqttVehicleDataSource.ts` | 订阅 `dev/pub/{clientId}`，缓存 1010001 |
+| `src/store/vehicleStatusStore.ts` | MQTT 状态内存；15s stale |
+| `config/site/vehicles.yaml` | 推送车辆名单 |
+| `data-site/beidou-callback.json` | register 持久化（gitignore，运行时生成） |
+
+**接手命令**
+
+```powershell
+git pull origin main
+cd beidou-bridge
+npm ci && npm run build
+npm run test:mqtt-lab          # 有网开发机验证
+# 现场：START-bridge.bat + register + SIMULATE-vehicle 或真车
+```
 
 ### 协议与北斗（既有）
 

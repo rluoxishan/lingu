@@ -1,0 +1,10 @@
+# 现场无外网：车端 5G → 本机 EMQX → bridge 订阅 1010001
+brokerUrl: "mqtt://127.0.0.1:1883"
+clientId: "beidou-bridge-site"
+username: ""
+password: ""
+positionMode: "map_xy"
+subscribeTopicPattern: "dev/pub/{clientId}"
+publishTopicPattern: "dev/sub/{clientId}"
+# 超过此时间未收到 1010001 视为 offline
+staleThresholdMs: 15000

@@ -1,0 +1,39 @@
+beidou-bridge — 发给北斗方（联调前确认）
+========================================
+
+一、我方中转程序部署在中转机，联调当天提供以下地址（<IP> 为现场填写）：
+
+  健康检查   GET  http://<IP>:8080/health
+             预期: {"status":"up"}
+
+  注册回调   POST http://<IP>:8080/api/v1/beidou/callback/register
+             Content-Type: application/json
+             Body:
+             {
+               "url": "<北斗方提供的回调完整URL>",
+               "frequency": 4000
+             }
+             预期: HTTP 200, code=0, data.vehicleIds 含 LU2606000100
+
+  反控导航   POST http://<IP>:8080/api/v1/beidou/navigation
+             （本次 B1 一般不测，B2 再开）
+
+二、网络要求
+
+  - 北斗 → 中转机 8080 可达（register + health）
+  - 中转机 → 北斗回调 URL 可达（定时推送 POST）
+  - 中转机 → https://sztu.lingubot.cn 可达（拉车辆状态）
+
+三、北斗侧验收（B1）
+
+  1. 发起 register（url 填北斗回调地址，frequency=4000）
+  2. 约每 4 秒收到一次 POST（每车一条）
+  3. 推送 Body 含 data.vehicleId、state、powerLevel、x、y 等
+  4. 北斗 HTTP 响应须: {"code":1000}
+
+四、联调前请提供
+
+  - 中转机 IP、联调时间、现场联系人
+  - 北斗回调 URL（register Body 中的 url 字段）
+
+详细协议见 docs/协议0629-中转响应定稿.md

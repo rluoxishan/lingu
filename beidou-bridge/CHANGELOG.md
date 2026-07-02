@@ -9,9 +9,29 @@
 ## [Unreleased]
 
 ### 计划中
-- refreshToken 自动刷新
-- tpapi 坐标反控 API（若云平台提供）
-- 教研版 HTTP 字段与商用对齐
+- 真车 LU2605000922 现场 MQTT 联调验收
+- B2 navigation（MQTT 2010001 下发）
+- bridge 开机自启脚本与 `CONFIG_DIR=./config/site` 对齐
+
+---
+
+## [0.7.0] - 2026-07-02
+
+### Added
+- **MQTT 数据源**：`dataSource: mqtt`，`MqttVehicleDataSource` 订阅 `dev/pub/{clientId}` 缓存 1010001
+- `config/site/mqtt.yaml`、Mosquitto 联调示例、5G 车端 MQTT 模拟器
+- 现场 bat：`START-bridge.bat`、`SIMULATE-vehicle.bat`、`CHECK-env.bat`、防火墙脚本
+- 离线 U 盘打包、`npm run test:mqtt-lab` 自动化实验室
+- 文档：MQTT 部署/对接/启动 Word、[MQTT现场对接指南.md](./docs/MQTT现场对接指南.md)
+
+### Changed
+- 现场模式改为 MQTT 直连（无外网不依赖 admin-api / `.env`）
+- 现场测试车 **`LU2605000922`**（`config/site/vehicles.yaml`）
+- register 幂等、推送逻辑不变；health 增加 `mqttConnected`
+
+### Fixed
+- `SIMULATE-vehicle.bat` broker URL 重复拼接
+- `START-bridge.bat` UTF-8 echo 乱码
 
 ---
 

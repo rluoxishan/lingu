@@ -1,16 +1,16 @@
-import type { CloudConfig, CloudVehicleStatus, VehicleConfig } from "../models/types.js";
+import type { CloudVehicleStatus, VehicleConfig } from "../models/types.js";
 import type { BeidouPushData } from "../models/types.js";
 
 /**
- * 云侧设备详情 → 北斗推送 data。
+ * 云侧/MQTT 1010001 → 北斗推送 data。
  * positionMode=lonlat 时 x/y 为经度/纬度（待与北斗确认是否接受）。
  */
 export function mapStatusToBeidou(
   status: CloudVehicleStatus,
   vehicle: VehicleConfig,
-  cloud: CloudConfig,
+  positionMode: "lonlat" | "map_xy",
 ): BeidouPushData {
-  const { x, y } = resolveXY(status, cloud.positionMode);
+  const { x, y } = resolveXY(status, positionMode);
   const heading = status.heading ?? 0;
   const hasFault = status.faultSummary?.hasFault ?? false;
   const currentTask = status.taskName ?? status.taskId ?? "";
@@ -33,7 +33,7 @@ export function mapStatusToBeidou(
 
 function resolveXY(
   status: CloudVehicleStatus,
-  mode: CloudConfig["positionMode"],
+  mode: "lonlat" | "map_xy",
 ): { x: number; y: number } {
   if (mode === "map_xy" && status.positionXyz) {
     return { x: status.positionXyz.x, y: status.positionXyz.y };

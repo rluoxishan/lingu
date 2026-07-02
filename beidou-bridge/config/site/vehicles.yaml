@@ -1,6 +1,6 @@
-# 现场 B1：仅启用到场巡检车（deviceId = 云平台 deviceId）
+# 现场 B1：仅启用到场测试车（deviceId = 云平台 deviceId / MQTT clientId）
 vehicles:
-  - vehicleId: "LU2606000100"
-    clientId: "LU2606000100"
+  - vehicleId: "LU2605000922"
+    clientId: "LU2605000922"
     floor: 1
     enabled: true

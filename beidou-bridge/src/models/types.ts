@@ -9,6 +9,20 @@ export interface VehiclesConfig {
   vehicles: VehicleConfig[];
 }
 
+export interface MqttConfig {
+  brokerUrl: string;
+  clientId: string;
+  username?: string;
+  password?: string;
+  /** lonlat: position 字段为经度,纬度；map_xy: 使用 position_xyz 米制坐标 */
+  positionMode: "lonlat" | "map_xy";
+  subscribeTopicPattern: string;
+  publishTopicPattern: string;
+  staleThresholdMs: number;
+}
+
+export type DataSourceMode = "cloud" | "mqtt";
+
 export interface CloudAuthConfig {
   /** lingu_admin_login：管理后台；tpapi_login：第三方机机（RSA 加密密码） */
   type: string;
@@ -66,10 +80,12 @@ export interface PushConfig {
 }
 
 export interface AppConfig {
+  dataSource: DataSourceMode;
   server: ServerConfig;
   push: PushConfig;
   dataDir: string;
-  cloud: CloudConfig;
+  cloud?: CloudConfig;
+  mqtt?: MqttConfig;
   vehicles: VehicleConfig[];
 }
 
