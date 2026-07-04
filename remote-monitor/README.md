@@ -56,11 +56,12 @@ remote-monitor/
 
 | ---- | ---- | ---- |
 
-| **对外协议 V1.0.0** | [docs/灵鱿科技远程监控与控制协议-V1.0.0.md](./docs/灵鱿科技远程监控与控制协议-V1.0.0.md) | MQTT 车端篇：推流 + 远程控制 |
-| Word 版 | [docs/灵鱿科技远程监控与控制协议-V1.0.0.docx](./docs/灵鱿科技远程监控与控制协议-V1.0.0.docx) | 用 `scripts/build-protocol-docx.mjs` 生成（表格列宽已修复） |
-| 协议 Draft（通用 md） | [docs/protocol/远程监控与控制协议-V1.0-draft.md](./docs/protocol/远程监控与控制协议-V1.0-draft.md) | 与 V1.0.0 内容同步 |
-| **r6 变更说明** | [docs/protocol/吉狮-远程监控与控制协议-变更说明-V1.0-draft-r6.md](./docs/protocol/吉狮-远程监控与控制协议-变更说明-V1.0-draft-r6.md) | 发参考版建议一并附上 |
-| 变更说明 Word | [docs/protocol/吉狮-远程监控与控制协议-变更说明-V1.0-draft-r6.docx](./docs/protocol/吉狮-远程监控与控制协议-变更说明-V1.0-draft-r6.docx) | |
+| **对外协议 V1.0.0（车端 MQTT）** | [docs/灵鱿科技远程监控与控制协议-V1.0.0.md](./docs/灵鱿科技远程监控与控制协议-V1.0.0.md) | 2010002/2010004/2010005/2010008；§12 已定稿 |
+| Word 版 V1.0 | [docs/灵鱿科技远程监控与控制协议-V1.0.0.docx](./docs/灵鱿科技远程监控与控制协议-V1.0.0.docx) | 用 `scripts/build-protocol-docx.mjs` 生成（**勿**直接用裸 `md-to-docx`，腾讯文档表格会塌） |
+| **对外协议 V2.0（云平台 API）** | [docs/灵鱿科技远程监控与控制协议-V2.0-云平台API篇.md](./docs/灵鱿科技远程监控与控制协议-V2.0-云平台API篇.md) | Draft：开流 playUrl、状态、控制转发 |
+| 协议 Draft（通用 md） | [docs/protocol/远程监控与控制协议-V1.0-draft.md](./docs/protocol/远程监控与控制协议-V1.0-draft.md) | 与 V1.0.0 同步维护 |
+| **r7 变更说明** | [docs/protocol/吉狮-远程监控与控制协议-变更说明-V1.0-draft-r7.md](./docs/protocol/吉狮-远程监控与控制协议-变更说明-V1.0-draft-r7.md) | 2026-07-03 定稿摘要 |
+| r6 变更说明 | [docs/protocol/吉狮-远程监控与控制协议-变更说明-V1.0-draft-r6.md](./docs/protocol/吉狮-远程监控与控制协议-变更说明-V1.0-draft-r6.md) | 历史参考 |
 
 | **瑜权确认清单** | [docs/确认清单-协议与改动.md](./docs/确认清单-协议与改动.md) | ✅ 控制/遥测字段已定义 |
 
@@ -70,7 +71,9 @@ remote-monitor/
 
 | 摄像机架构与抓包 | [docs/internal/摄像头架构与联调抓包.md](./docs/internal/摄像头架构与联调抓包.md) | 监控页一次 HTTP 开流 |
 
-| 云平台 OpenAPI | `http://8.155.18.62:48080/doc.html` | 车辆 API 有；开流 playUrl 待抓包 |
+| M1 联调 | [docs/internal/联调记录-2026-07-03.md](./docs/internal/联调记录-2026-07-03.md) · [发给瑜权](./docs/internal/发给瑜权-M1联调确认单.md) · [发给Hasun](./docs/internal/发给Hasun-API确认单.md) | 阶段 2 验收与 V2 补素材 |
+
+| 云平台 OpenAPI | `http://8.155.18.62:48080/doc.html` | 车辆 API 有；开流走 `instructions`+`2010004`（sztu 已验证） |
 
 
 
@@ -112,18 +115,18 @@ remote-monitor/
 
 | ---- | -------- |
 
-| 监控页 | `../yudao-ui-admin-vue3/src/views/car/car/monitor/index.vue` |
+| 监控页 | `../ling-ubot_front-end/yudao-ui-admin-vue3/src/views/car/monitor/index.vue` |
 
-| 视频面板 | `../yudao-ui-admin-vue3/src/views/car/car/visualization/panels/VideoPanel.vue` |
+| 视频面板 | `../ling-ubot_front-end/yudao-ui-admin-vue3/src/views/car/car/visualization/panels/VideoPanel.vue` |
 
-| 控制台 | `../yudao-ui-admin-vue3/src/views/car/car/visualization/panels/RemoteDrivePanel.vue` |
+| 控制台 | `../ling-ubot_front-end/yudao-ui-admin-vue3/src/views/car/car/visualization/panels/RemoteDrivePanel.vue` |
 
-| 云台面板 | `../yudao-ui-admin-vue3/src/views/car/car/visualization/panels/PtzControlPanel.vue` |
+| 云台面板 | `../ling-ubot_front-end/yudao-ui-admin-vue3/src/views/car/car/visualization/panels/PtzControlPanel.vue` |
 
-| 车辆 API | `../yudao-ui-admin-vue3/src/api/car/vehicle/index.ts` |
-| 监控遥测 composable | `../yudao-ui-admin-vue3/src/views/car/car/monitor/useMonitorVehicle.ts` |
-| MQTT payload 封装 | `../yudao-ui-admin-vue3/src/views/car/car/visualization/mqttPayload.ts` |
-| 控制 Mock 下发 | `../yudao-ui-admin-vue3/src/views/car/car/visualization/monitorControl.ts` |
+| 车辆 API | `../ling-ubot_front-end/yudao-ui-admin-vue3/src/api/car/vehicle/index.ts` |
+| 监控遥测 composable | `../ling-ubot_front-end/yudao-ui-admin-vue3/src/views/car/monitor/useMonitorVehicle.ts` |
+| MQTT payload 封装 | `../ling-ubot_front-end/yudao-ui-admin-vue3/src/views/car/car/visualization/mqttPayload.ts` |
+| 控制 Mock 下发 | `../ling-ubot_front-end/yudao-ui-admin-vue3/src/views/car/car/visualization/monitorControl.ts` |
 
 
 
@@ -141,13 +144,15 @@ remote-monitor/
 
 ```
 
-阶段 1  协议定稿（合并确认清单）           ← 当前
+阶段 1  文档定稿（V1.0 md + V2 大纲 + 联调模板）  ← 当前
 
-阶段 2  云平台开流 API + 控制转发
+阶段 2  M1 实验验收 → 勾选联调记录
 
-阶段 3  前端第一批 V1.0 → 第二批联调
+阶段 3  Word 正式版 + 对外发放
 
-阶段 4  （可选）AI 事件检测
+阶段 4  前端真联调 + V2 API 补示例
+
+阶段 5  （可选）AI 事件检测
 
 ```
 
@@ -181,12 +186,13 @@ remote-monitor/
 
 ```powershell
 cd remote-monitor/scripts
-python build-protocol-docx.py
-# 或
-node build-protocol-docx.mjs
+npm install   # 首次
+node build-protocol-docx.mjs "..\docs\灵鱿科技远程监控与控制协议-V2.0-云平台API篇.md"
+node build-protocol-docx.mjs "..\docs\灵鱿科技远程监控与控制协议-V1.0.0.md"
 ```
 
-默认输入：`docs/灵鱿科技远程监控与控制协议-V1.0.0.md`  
-输出同目录 `.docx`（含标题大纲、自动目录域、统一字体、表格列宽）。
+脚本会：md → docx → **固定表格列宽**（腾讯文档/WPS 可正常显示）。有 Python 时自动用完整版（含目录域）。
+
+**上传腾讯文档**：请用上述脚本生成的 `.docx`，不要用裸 `npx @mohtasham/md-to-docx` 产物。
 
 **打开 Word 后**：右键目录区域 → **更新域**，即可生成可点击目录并启用左侧导航窗。

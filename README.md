@@ -8,7 +8,7 @@
 | ---- | ---- |
 | `beidou-bridge/` | 北斗中转程序 |
 | `remote-monitor/` | 远程监控与控制（协议、文档、前端说明） |
-| `yudao-ui-admin-vue3/` | 云平台管理前端 |
+| `ling-ubot_front-end/yudao-ui-admin-vue3/` | 云平台管理前端（Gitee `develop-helen`） |
 | `_archive/` | 归档脚本与参考材料 |
 
 ## 说明

@@ -1,0 +1,125 @@
+{
+    "building_name": "lhgk",
+    "floor_id": 101,
+    "points": [
+        {
+            "id": 0,
+            "name": "任务点",
+            "orientation_w": 0.7106333442913787,
+            "orientation_x": 0,
+            "orientation_y": 0,
+            "orientation_z": -0.7035625416274311,
+            "properties": {
+                "name": "任务点",
+                "remark": "咨询台",
+                "type": "waypoint"
+            },
+            "remark": "咨询台",
+            "x": 64.88254322819475,
+            "y": -14.309978439423714,
+            "z": 0
+        },
+        {
+            "id": 1,
+            "name": "任务点",
+            "orientation_w": 0.7115677107104403,
+            "orientation_x": 0,
+            "orientation_y": 0,
+            "orientation_z": -0.7026175297231796,
+            "properties": {
+                "name": "任务点",
+                "remark": "人工查验区",
+                "type": "waypoint"
+            },
+            "remark": "人工查验区",
+            "x": 50.139030875360916,
+            "y": 1.2332977780246726,
+            "z": 0
+        },
+        {
+            "id": 2,
+            "name": "任务点",
+            "orientation_w": 0.999983100543297,
+            "orientation_x": 0,
+            "orientation_y": 0,
+            "orientation_z": -0.0058136587287454244,
+            "properties": {
+                "name": "任务点",
+                "remark": "信息采集区",
+                "type": "waypoint"
+            },
+            "remark": "信息采集区",
+            "x": 102.07210679608019,
+            "y": 18.588173726795308,
+            "z": 0
+        },
+        {
+            "id": 3,
+            "name": "任务点",
+            "orientation_w": 0.9999818569419622,
+            "orientation_x": 0,
+            "orientation_y": 0,
+            "orientation_z": -0.0060237684969676915,
+            "properties": {
+                "name": "任务点",
+                "remark": "厕所",
+                "type": "waypoint"
+            },
+            "remark": "厕所",
+            "x": 124.83279284874523,
+            "y": 17.022657352401666,
+            "z": 0
+        },
+        {
+            "id": 4,
+            "name": "充电点",
+            "orientation_w": 0.7104031905440413,
+            "orientation_x": 0,
+            "orientation_y": 0,
+            "orientation_z": 0.7037949323949744,
+            "properties": {
+                "name": "充电点",
+                "remark": "充电点",
+                "type": "charging"
+            },
+            "remark": "充电点",
+            "x": 55.073719247652704,
+            "y": -9.922855310375445,
+            "z": 0
+        },
+        {
+            "id": 5,
+            "name": "开机点",
+            "orientation_w": 0.7071067811865476,
+            "orientation_x": 0,
+            "orientation_y": 0,
+            "orientation_z": 0.7071067811865475,
+            "properties": {
+                "name": "开机点",
+                "remark": "开机点",
+                "type": "initial"
+            },
+            "remark": "开机点",
+            "x": 55.17473030145454,
+            "y": -9.528913259751665,
+            "z": 0
+        },
+        {
+            "id": 6,
+            "name": "任务点",
+            "orientation_w": 0.7092081060966026,
+            "orientation_x": 0,
+            "orientation_y": 0,
+            "orientation_z": 0.7049991930824248,
+            "properties": {
+                "name": "任务点",
+                "remark": "站岗点",
+                "type": "waypoint"
+            },
+            "remark": "站岗点",
+            "x": 67.1773968194736,
+            "y": -7.4325544213498755,
+            "z": 0
+        }
+    ]
+}
